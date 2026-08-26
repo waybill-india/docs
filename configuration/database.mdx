@@ -1,0 +1,45 @@
+---
+title: "Database Setup and Migrations"
+sidebarTitle: "Database"
+description: "Set up Postgres for waybill-arc LangGraph checkpoints, channel tables, and web search runs. Run migrations with npm."
+---
+
+waybill-arc uses Postgres for LangGraph checkpoints (agent memory), the channel tables (`supplier_contacts`, `channel_threads`), and the `web_search_runs` table. This page covers installing Postgres, creating a database, and running the migration script.
+
+<Steps>
+  <Step title="Install Postgres and create a database">
+    Install Postgres 14 or later locally, or provision a managed instance such as Vercel Postgres. Create a database for waybill-arc.
+  </Step>
+  <Step title="Set DATABASE_URL">
+    Add the connection string to your `.env` file:
+
+    ```sh
+    DATABASE_URL=postgres://user:pass@host:5432/dbname
+    ```
+  </Step>
+  <Step title="Run migrations">
+    Execute the migration script to create all tables:
+
+    ```sh
+    npm run migrate
+    ```
+  </Step>
+</Steps>
+
+## Tables created
+
+The migration script sets up the following tables:
+
+- **LangGraph checkpoint tables** — managed by LangGraph for agent state persistence across stages
+- **`supplier_contacts`** — stores supplier addresses per channel (`supplier_id`, `channel`, `address`)
+- **`channel_threads`** — maps `(request_id, supplier_id, channel)` to the provider thread ID so replies stay in-thread and inbound webhooks can recover request context
+- **`web_search_runs`** — persists Exa web search run state and results
+
+<Note>
+  Vercel Postgres or any Postgres 14\+ instance works. The migration script is idempotent and safe to re-run.
+</Note>
+
+See also:
+
+- [Environment variables](/configuration/environment)
+- [Channels and messaging](/guides/channels)

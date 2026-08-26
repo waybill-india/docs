@@ -1,0 +1,59 @@
+---
+title: "Vapi Voice and SMS Webhook"
+sidebarTitle: "Vapi Webhook"
+description: "POST /webhook/vapi receives Vapi call-end and SMS session events to resume the supervisor run. Authenticated by x-waybill-signature header."
+---
+
+Vapi calls `POST /webhook/vapi` when a voice call ends or an SMS session updates. The endpoint authenticates requests with the `x-waybill-signature` header echoed back by Vapi from the `server.headers` set on each transient assistant. It matches the event to a request and supplier through `channel_threads` (Vapi call ID for voice, session ID for SMS), then resumes the supervisor run.
+
+## Endpoint
+
+```http
+POST /webhook/vapi
+```
+
+## Authentication
+
+Include the `x-waybill-signature` header. Vapi echoes this header from the `server.headers` configured on the transient assistant for each call or SMS session.
+
+## Request body
+
+<ParamField body="message" type="object" required>
+  Vapi event message. Only `end-of-call-report` and `session.updated` types are acted on.
+</ParamField>
+
+## Example
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST http://localhost:3001/webhook/vapi \
+  -H "Content-Type: application/json" \
+  -H "x-waybill-signature: your-secret" \
+  -d '{
+    "message": {
+      "type": "end-of-call-report",
+      "call": { "id": "call_abc123" }
+    }
+  }'
+```
+
+</CodeGroup>
+
+## Responses
+
+| Status | Body | Meaning |
+| --- | --- | --- |
+| 200 | `{}` | Event handled and the supervisor was resumed. |
+| 204 | (empty) | Event ignored: unhandled type, unmapped call or session, or nothing new from the supplier. |
+| 401 | `{ "error": "Invalid webhook signature" }` | The `x-waybill-signature` header did not match. |
+| 503 | `{ "error": "Vapi webhook is not configured" }` | `VAPI_WEBHOOK_SECRET` is not set. |
+
+## Failure behavior
+
+Failures that happen after a call is dispatched, such as unanswered, voicemail, insufficient credits, or international dialing blocked on free Vapi numbers, arrive as `endedReason` on the report rather than as HTTP errors. Vapi exposes no SMS delivery status. Inbound SMS is US↔US only, so a non-US supplier can receive an SMS but cannot reply through Vapi.
+
+## Related
+
+- [Webhooks Guide](/guides/webhooks)
+- [Channels Guide](/guides/channels)

@@ -1,0 +1,94 @@
+---
+title: "Structured Run Payloads: Quotes and Verdicts"
+sidebarTitle: "Structured Messages"
+description: "Learn how waybill-arc supervisor messages carry structured JSON for quotes and qualification verdicts so your UI can render results without parsing prose."
+---
+
+The waybill-arc [supervisor](/concepts/supervisor) returns a `messages` timeline. Most entries contain prose, but two message names carry structured JSON so your UI never has to pattern-match supplier wording. In both cases, the JSON array starts at the first `[` in `content`.
+
+## Quotes message (`name: "quotes"`)
+
+The `quotes` message contains an array of normalized quote objects, one per selected supplier. Quotes are refreshed after the counter-offer round, so you should read the **last** `quotes` message in the timeline.
+
+### Quote fields
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `supplierID` | string | The supplier who provided the quote. |
+| `quoted` | boolean | `true` when commercial terms were given; `false` when no terms were provided. |
+| `unitPrice` | number \| null | Unit price in the quoted currency. |
+| `currency` | string \| null | Currency code, such as "USD". |
+| `moq` | string \| null | Minimum order quantity. |
+| `leadTime` | string \| null | Lead time estimate. |
+| `packaging` | string \| null | Packaging type. |
+| `dateCode` | string \| null | Date code or freshness. |
+| `stockQuantity` | number \| null | Available stock quantity. |
+| `balanceLeadTime` | string \| null | Lead time for remaining balance. |
+| `notes` | string \| null | Additional notes from the supplier. |
+| `raw` | string | The supplier's original reply verbatim. |
+
+Every field except `supplierID`, `quoted`, and `raw` may be `null` when the supplier did not state it.
+
+When `quoted: false`, render the supplier as awaiting a quote rather than dropping it, and fall back to `raw` for any details.
+
+### Quotes example
+
+```json
+[
+  {
+    "supplierID": "SUP-00142",
+    "quoted": true,
+    "unitPrice": 1.87,
+    "currency": "USD",
+    "moq": "1,000 pcs",
+    "leadTime": "6 weeks",
+    "packaging": "Tape and reel",
+    "dateCode": "2023+",
+    "stockQuantity": 1200,
+    "balanceLeadTime": "800 pcs in 10 weeks",
+    "notes": "Authorized distributor, full traceability",
+    "raw": "…the supplier's reply verbatim…"
+  }
+]
+```
+
+## Qualification verdicts message (`name: "qualification_verdicts"`)
+
+The `qualification_verdicts` message contains an array of per-supplier assessment outcomes.
+
+### Verdict fields
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `supplierID` | string | The assessed supplier. |
+| `disposition` | string | `approved`, `excluded`, or `review`. |
+| `reasons` | string\[\] | Human-readable reasons for the disposition. |
+
+A `review` disposition means the assessment was inconclusive or silent about that supplier. The full narrative lives in the `qualification` message (name `qualification`) for a details view.
+
+### Verdicts example
+
+```json
+[
+  {
+    "supplierID": "SUP-00142",
+    "disposition": "approved",
+    "reasons": [
+      "Authorized distributor for STMicroelectronics",
+      "RoHS documentation provided"
+    ]
+  }
+]
+```
+
+## How to use them in your UI
+
+1. Walk the `messages` array and collect the last `quotes` and `qualification_verdicts` entries.
+2. Parse the JSON array from `content` starting at the first `[`.
+3. Join the two arrays by `supplierID` to build a quote comparison table.
+4. Use the `negotiation` message (the last message in the timeline) as the markdown award recommendation.
+
+## Related pages
+
+- [Supervisor](/concepts/supervisor)
+- [Rendering results](/guides/rendering-results)

@@ -1,0 +1,51 @@
+---
+title: "Supervisor: RFQs, Qualification, and Negotiation"
+sidebarTitle: "Supervisor"
+description: "Learn how the waybill-arc supervisor orchestrates RFQs, qualifies supplier quotes, negotiates counter-offers, and produces an award recommendation."
+---
+
+The waybill-arc supervisor is the procurement orchestration layer. After [search](/concepts/search) selects suppliers and sends RFQs, the supervisor awaits supplier replies, qualifies incoming quotes, runs a negotiation round with counter-offers, and produces a final award recommendation.
+
+## Supervisor lifecycle
+
+The supervisor moves through three statuses:
+
+| Status | Meaning |
+| --- | --- |
+| `awaiting_supplier_responses` | RFQs or counter-offers are out; waiting for suppliers to reply. |
+| `in_progress` | The run is actively processing replies or preparing the next step. |
+| `completed` | The run finished and the award recommendation is ready. |
+
+Supplier replies arrive via `POST /webhook` and resume the run automatically. The run may re-enter `awaiting_supplier_responses` during the negotiation counter-offer round, so you should keep polling until `status` is `completed`.
+
+## Supervisor response fields
+
+A `GET /supervisor/:requestID` response contains:
+
+- **`request`** — the full request context, including `selectedSupplierIDs`, `selections` (why each supplier was chosen), and the `resolvedQuery`.
+- **`interrupts`** — when the run is waiting, each interrupt lists which supplier IDs it is `waitingFor`.
+- **`messages`** — a timeline of the entire run. Each message has `type` (`human | ai | tool`) and a `name` that tells you what stage it belongs to.
+
+## Message timeline names
+
+| Name | What it represents |
+| --- | --- |
+| `rfq` | RFQs sent to suppliers. |
+| `supplier_responses` | Raw replies from suppliers. |
+| `quotes` | Normalized quote data (structured JSON). |
+| `qualification` | Full qualification narrative. |
+| `qualification_verdicts` | Structured per-supplier verdicts. |
+| `counter_responses` | Replies received after counter-offers. |
+| `negotiation` | Final markdown award recommendation. |
+
+The final `negotiation` message is the markdown summary with per-supplier outcomes and the award recommendation. Render it as the result.
+
+## Polling pattern
+
+Poll `GET /supervisor/:requestID` every 5–10 seconds after starting [search](/concepts/search). The run resumes automatically when supplier replies arrive via webhook, so your UI only needs to poll for state changes.
+
+## Related pages
+
+- [Get supervisor state](/api-reference/supervisor/get)
+- [Structured messages](/concepts/structured-messages)
+- [Rendering results](/guides/rendering-results)

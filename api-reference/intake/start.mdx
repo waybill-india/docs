@@ -1,0 +1,135 @@
+---
+title: "Start a Request (POST /intake)"
+sidebarTitle: "Start Request"
+description: "Submit a free-text purchase query to POST /intake. The agent asks clarifying questions or returns a structured ResolvedQuery."
+---
+
+Submit a free-text purchase query to `POST /intake` to begin a procurement request. The intake agent resolves the query into a structured part spec. If the agent needs more information, it returns a clarifying question. Otherwise, it returns the resolved spec immediately.
+
+## Request
+
+`POST /intake`
+
+<ParamField body="query" type="string" required>
+  A non-empty free-text description of the part you need. Example: `"Need 2000 units of STM32F103C8T6"`.
+</ParamField>
+
+```bash
+curl -X POST http://localhost:3001/intake \
+  -H "Content-Type: application/json" \
+  -d '{"query": "Need 2000 units of STM32F103C8T6"}'
+```
+
+## Response
+
+The response is always `200` and has one of two shapes.
+
+### Awaiting answer
+
+The agent needs clarification before it can resolve the query.
+
+<ResponseField name="requestID" type="string">
+  UUID for this request. Use it in subsequent intake, search, and supervisor calls.
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  Always `"awaiting_answer"`.
+</ResponseField>
+
+<ResponseField name="question" type="string">
+  The clarifying question to show the user.
+</ResponseField>
+
+<ResponseField name="options" type="string[]">
+  Selectable answers. When empty, the question is open-ended and accepts free text.
+</ResponseField>
+
+<ResponseField name="allowMultiple" type="boolean">
+  Whether the user may select more than one option.
+</ResponseField>
+
+<ResponseField name="questionID" type="string">
+  Identifier for this question. Include it when submitting the answer.
+</ResponseField>
+
+<ResponseField name="qa" type="array">
+  Full clarification transcript. Each entry has `question` and `answer` (null for the pending question).
+</ResponseField>
+
+```json
+{
+  "requestID": "299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21",
+  "status": "awaiting_answer",
+  "question": "Which packaging do you need?",
+  "options": ["Tape and reel", "Tray", "Tube"],
+  "allowMultiple": false,
+  "questionID": "b1e494ec…",
+  "qa": [{ "question": "Which packaging do you need?", "answer": null }]
+}
+```
+
+When `options` is `[]`, render a plain text input. Free text is always accepted, even when options are provided.
+
+### Resolved
+
+The agent has enough information and produced a structured part spec.
+
+<ResponseField name="requestID" type="string">
+  UUID for this request.
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  Always `"resolved"`.
+</ResponseField>
+
+<ResponseField name="resolvedQuery" type="object">
+  Structured part spec. See [ResolvedQuery](/concepts/resolved-query) for the full shape.
+</ResponseField>
+
+<ResponseField name="bestEffort" type="boolean">
+  `true` when intake resolved below its confidence threshold. Flag this in the UI.
+</ResponseField>
+
+<ResponseField name="qa" type="array">
+  Full clarification transcript, including all answered questions.
+</ResponseField>
+
+```json
+{
+  "requestID": "299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21",
+  "status": "resolved",
+  "resolvedQuery": {
+    "requestID": "299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21",
+    "rawQuery": "Need 2000 units of STM32F103C8T6 microcontrollers…",
+    "part": {
+      "name": "STM32F103C8T6 microcontroller",
+      "category": "Microcontroller",
+      "manufacturer": "STMicroelectronics",
+      "mpn": "STM32F103C8T6",
+      "specs": { "package": "LQFP-48", "flash_kb": 64, "rohs_compliant": true }
+    },
+    "quantity": { "value": 2000, "unit": "units", "packaging": "tray" },
+    "confidence": 0.96,
+    "unresolvedTerms": [],
+    "sources": [
+      { "url": "https://www.st.com/…", "note": "Official ST product page…" }
+    ]
+  },
+  "bestEffort": false,
+  "qa": [
+    { "question": "Which packaging do you need?", "answer": "Tray" }
+  ]
+}
+```
+
+## Errors
+
+| Status | Body |
+| --- | --- |
+| 400 | `{ "errors": [ …zod issues… ] }` |
+
+## Next steps
+
+- If the response is `awaiting_answer`, submit the answer with [POST /intake/:requestID/answer](/api-reference/intake/answer).
+- If the response is `resolved`, move to supplier discovery with [POST /search/:requestID](/api-reference/search/start).
+- Learn how intake works in [Intake](/concepts/intake) and how the resolved spec is structured in [ResolvedQuery](/concepts/resolved-query).

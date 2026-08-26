@@ -1,0 +1,84 @@
+---
+title: "Start Supplier Search"
+sidebarTitle: "Start Search"
+description: "POST /search/:requestID selects internal suppliers, sends RFQs, and optionally starts a parallel Exa web search for open-web suppliers."
+---
+
+Initiate the supplier search stage for a resolved intake request. This endpoint selects internal suppliers from your supplier network, hands them off to the supervisor for RFQ dispatch, and optionally starts a parallel Exa web search when `EXA_API_KEY` is configured. No request body is required.
+
+## Endpoint
+
+```http
+POST /search/:requestID
+```
+
+## Request
+
+No request body is needed. Send the `requestID` as a path parameter.
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST http://localhost:3001/search/299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21 \
+  -H "Content-Type: application/json"
+```
+
+</CodeGroup>
+
+## Response
+
+### 200 — Internal suppliers found
+
+When internal suppliers are matched, the supervisor receives the handoff and sends RFQs. The response includes the supplier selections, supervisor status, and web search state if enabled.
+
+```json
+{
+  "requestID": "299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21",
+  "selections": [
+    {
+      "supplierID": "SUP-00142",
+      "description": "…the supplier's own profile from the supplier network…",
+      "reasoning": "Franchised distributor explicitly handles STM32…"
+    }
+  ],
+  "supervisor": {
+    "status": "awaiting_supplier_responses",
+    "waitingFor": ["SUP-00142", "SUP-00187"]
+  },
+  "webSearch": { "runId": "agent_run_01j…", "status": "running" }
+}
+```
+
+### 200 — No internal suppliers matched
+
+When no internal suppliers match but the web search leg is enabled, `supervisor` is `null` and no RFQs are sent. Poll [`GET /search/:requestID/web`](/api-reference/search/web) for web supplier candidates instead.
+
+```json
+{
+  "requestID": "299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21",
+  "selections": [],
+  "supervisor": null,
+  "webSearch": { "runId": "agent_run_01j…", "status": "running" }
+}
+```
+
+## Errors
+
+| Status | Body | Meaning |
+| --- | --- | --- |
+| 404 | `{ "error": "Request not found" }` | The `requestID` does not exist. |
+| 409 | `{ "error": "Intake is not resolved yet", "status": "awaiting_answer" }` | The intake stage is still asking clarifying questions. Resolve it first. |
+| 409 | `{ "error": "Request was already handed off to the supervisor", "status": "…" }` | The request has already been handed off; a second call is not allowed. |
+| 422 | `{ "requestID": "299cb5b9-…", "error": "No plausible suppliers found for this part — not producing a handoff payload" }` | No suppliers were found and the web search is unavailable (`EXA_API_KEY` unset or the run could not be created). This is terminal; show as "no suppliers found." |
+
+## Behavior notes
+
+- A second call after a successful handoff returns **409**.
+- After a **no-internal-suppliers 200**, a retry is allowed and reuses the same web search run.
+- `webSearch` is only present when the Exa leg is enabled and its run started successfully.
+
+## Related
+
+- [Get Web Search Candidates](/api-reference/search/web)
+- [Get Supervisor Run State](/api-reference/supervisor/get)
+- [Search Concepts](/concepts/search)

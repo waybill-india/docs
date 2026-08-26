@@ -1,0 +1,60 @@
+---
+title: "ResolvedQuery: The Structured Part Specification"
+sidebarTitle: "ResolvedQuery"
+description: "Learn how waybill-arc intake produces a ResolvedQuery with part details, quantity, confidence, and sources for downstream search and supervisor stages."
+---
+
+When waybill-arc intake finishes, it returns a `ResolvedQuery`. This is the structured part specification that drives the [search](/concepts/search) and [supervisor](/concepts/supervisor) stages. It contains the resolved part details, quantity, confidence score, and any terms that could not be resolved.
+
+## ResolvedQuery fields
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `requestID` | string | The UUID that identifies this request across all stages. |
+| `rawQuery` | string | The original free-text query submitted by the user. |
+| `part` | object | The resolved part details. |
+| `part.name` | string | Human-readable part name. |
+| `part.category` | string | Part category, such as "Microcontroller". |
+| `part.manufacturer` | string \| null | Preferred or identified manufacturer. |
+| `part.mpn` | string \| null | Manufacturer part number. |
+| `part.specs` | object | Part-specific specifications. Keys vary by part. |
+| `quantity` | object | The requested quantity and packaging. |
+| `quantity.value` | number | Numeric quantity. |
+| `quantity.unit` | string | Unit of measure, such as "units" or "pcs". |
+| `quantity.packaging` | string \| null | Packaging type, such as "tray" or "tape and reel". |
+| `confidence` | number | 0–1 confidence score from the intake agent. |
+| `unresolvedTerms` | string\[\] | Terms the agent could not resolve. |
+| `sources` | object\[\] | Evidence sources used to build the spec. |
+| `sources[].url` | string | Source URL. |
+| `sources[].note` | string | Short description of what the source confirms. |
+
+## Full example
+
+```json
+{
+  "requestID": "299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21",
+  "rawQuery": "Need 2000 units of STM32F103C8T6 microcontrollers…",
+  "part": {
+    "name": "STM32F103C8T6 microcontroller",
+    "category": "Microcontroller",
+    "manufacturer": "STMicroelectronics",
+    "mpn": "STM32F103C8T6",
+    "specs": { "package": "LQFP-48", "flash_kb": 64, "rohs_compliant": true }
+  },
+  "quantity": { "value": 2000, "unit": "units", "packaging": "tray" },
+  "confidence": 0.96,
+  "unresolvedTerms": [],
+  "sources": [
+    { "url": "https://www.st.com/…", "note": "Official ST product page…" }
+  ]
+}
+```
+
+## Best effort flag
+
+When `bestEffort: true` appears on the intake response, the agent gave up before reaching the confidence threshold. You should flag this in your UI so the user can review and correct the spec before proceeding to search.
+
+## Related pages
+
+- [Intake](/concepts/intake)
+- [Get intake state](/api-reference/intake/get)

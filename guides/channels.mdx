@@ -1,0 +1,113 @@
+---
+title: "Channels: Email, Voice, and SMS Outreach"
+sidebarTitle: "Channels"
+description: "Learn how waybill-arc sends RFQs over email, voice, and SMS through a unified channel layer, and how to register contacts and configure each provider."
+---
+
+waybill-arc sends RFQs to suppliers through a unified messaging layer in `src/channels/`. Each channel client (email via AgentMail, voice and SMS via Vapi, the supplier simulator, and WhatsApp later) implements the same `ChannelClient` contract. `src/channels/index.ts` is the only surface callers touch, so inbound replies and outbound sends share one interface regardless of the underlying provider.
+
+## Unified channel API
+
+```typescript
+import { getThread, sendMessage, sendMessages } from "./channels/index.js";
+
+// Send a single message to one supplier
+await sendMessage({
+  requestID: "299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21",
+  supplierID: "SUP-00142",
+  channel: "email",
+  message: "Please quote 2000 units of STM32F103C8T6...",
+});
+
+// Broadcast the same message to multiple suppliers on one channel
+await sendMessages({
+  requestID: "299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21",
+  channel: "email",
+  supplierIDs: ["SUP-00142", "SUP-00187"],
+  message: "Please quote 2000 units of STM32F103C8T6...",
+});
+
+// Retrieve the provider thread for a given supplier and channel
+const thread = await getThread({
+  requestID: "299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21",
+  supplierID: "SUP-00142",
+  channel: "email",
+});
+```
+
+## Registering supplier contacts
+
+Before sending on any channel, register the supplier’s address in the `supplier_contacts` table. Use an upsert so updates overwrite existing entries.
+
+```sql
+INSERT INTO supplier_contacts (supplier_id, channel, address)
+VALUES
+  ('SUP-00142', 'email', 'sales@supplier.example'),
+  ('SUP-00142', 'voice', '+14155550123'),
+  ('SUP-00142', 'sms', '+14155550123')
+ON CONFLICT (supplier_id, channel) DO UPDATE SET address = EXCLUDED.address;
+```
+
+## Threads
+
+`channel_threads` maps `(request_id, supplier_id, channel)` to the provider thread so replies stay in-thread and inbound webhooks can recover the request context.
+
+- For `voice`, the thread is the most recent Vapi call ID.
+- For `sms`, the thread is the Vapi session ID.
+- For `email`, the thread is managed by AgentMail.
+
+## Email (AgentMail)
+
+To receive email replies, point AgentMail at `POST /webhook/email` and store the printed webhook secret as `AGENTMAIL_WEBHOOK_SECRET`.
+
+```bash
+npm run channels:register-webhook -- https://your-host/webhook/email
+```
+
+Required environment variables:
+
+| Variable | Description |
+| --- | --- |
+| `AGENTMAIL_API_KEY` | AgentMail API key |
+| `AGENTMAIL_WEBHOOK_SECRET` | Svix signing secret for inbound email |
+| `AGENTMAIL_INBOX_ID` | Use an existing inbox instead of creating one |
+| `AGENTMAIL_INBOX_USERNAME` | Username for the shared inbox (default: `procurement`) |
+
+## Voice (Vapi)
+
+Vapi needs no webhook registration step. Every call creates a transient assistant carrying `server.url` and `server.headers`, so setting `VAPI_WEBHOOK_URL` and `VAPI_WEBHOOK_SECRET` is enough for `POST /webhook/vapi` to start receiving events.
+
+A voice call delivers the message to the supplier, falls back to voicemail if unanswered, and fires `end-of-call-report` when the call ends. That event resumes the supervisor automatically. `getThread` reconstructs the conversation from the call transcript.
+
+Required environment variables:
+
+| Variable | Description |
+| --- | --- |
+| `VAPI_API_KEY` | Vapi API key |
+| `VAPI_PHONE_NUMBER_ID` | Vapi phone number placing outbound calls |
+| `VAPI_WEBHOOK_URL` | Public URL of `POST /webhook/vapi` |
+| `VAPI_WEBHOOK_SECRET` | Shared secret echoed back as `x-waybill-signature` |
+
+## SMS (Vapi)
+
+SMS uses the same Vapi integration but with additional constraints.
+
+<Warning>
+  SMS is constrained by Vapi and Twilio requirements:
+
+  - It requires a 10DLC-approved US Twilio number imported into Vapi (`VAPI_SMS_PHONE_NUMBER_ID`).
+  - Outbound SMS to non-US numbers works, but inbound SMS is US↔US only. A non-US supplier cannot reply through Vapi.
+  - Vapi’s own assistant auto-answers inbound SMS before the supervisor sees it.
+  - Resuming on an SMS reply relies on the `session.updated` event, which is unverified against a live 10DLC number. Polling `getThread` remains the reliable path, so an SMS RFQ still works even if the event never arrives.
+</Warning>
+
+Required environment variables:
+
+| Variable | Description |
+| --- | --- |
+| `VAPI_API_KEY` | Vapi API key |
+| `VAPI_SMS_PHONE_NUMBER_ID` | SMS-enabled US Twilio number imported into Vapi |
+| `VAPI_WEBHOOK_URL` | Public URL of `POST /webhook/vapi` |
+| `VAPI_WEBHOOK_SECRET` | Shared secret echoed back as `x-waybill-signature` |
+
+For how inbound webhooks resume the supervisor, see [Webhooks](/guides/webhooks). For the full list of environment variables, see [Environment Variables](/configuration/environment).

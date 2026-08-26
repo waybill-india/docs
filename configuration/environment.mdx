@@ -1,0 +1,95 @@
+---
+title: "Environment Variables and App Configuration"
+sidebarTitle: "Environment"
+description: "Configure waybill-arc with environment variables for LLMs, Postgres, channels, and optional tracing and web search."
+---
+
+waybill-arc reads its configuration from a `.env` file in the repo root, validated by `src/config.ts`. Set the required keys for LLM calls and database connectivity, then add optional variables to tune agent behavior, enable channels, or wire observability.
+
+## Required
+
+| Variable | Description |
+| --- | --- |
+| `OPENAI_API_KEY` | OpenAI key for LLM calls |
+| `DATABASE_URL` | Postgres connection string for LangGraph checkpoints and channel tables |
+| `SUPPLIER_API_URL` | Base URL for the supplier simulator exposing `GET /api/getAllSuppliers` |
+
+## Agent tuning
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `CONFIDENCE_THRESHOLD` | `0.9` | Minimum confidence before intake resolves a query |
+| `MAX_TOOL_ITERATIONS` | `15` | Cap on agent tool-call loops |
+
+## Tracing (Langfuse)
+
+| Variable | Description |
+| --- | --- |
+| `LANGFUSE_PUBLIC_KEY` | Langfuse public key; tracing disabled when unset |
+| `LANGFUSE_SECRET_KEY` | Langfuse secret key; tracing disabled when unset |
+| `LANGFUSE_BASE_URL` | Langfuse host, e.g. `https://us.cloud.langfuse.com` |
+
+## Web search (Exa)
+
+| Variable | Description |
+| --- | --- |
+| `EXA_API_KEY` | Enables the parallel Exa web-search leg of `POST /search` |
+
+## Email channel (AgentMail)
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `AGENTMAIL_API_KEY` | — | Required to use the email channel |
+| `AGENTMAIL_WEBHOOK_SECRET` | — | Svix signing secret for `POST /webhook/email` |
+| `AGENTMAIL_INBOX_ID` | — | Use an existing inbox instead of creating one |
+| `AGENTMAIL_INBOX_USERNAME` | `procurement` | Username for the shared inbox created on first use |
+
+## Voice/SMS channel (Vapi)
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `VAPI_API_KEY` | — | Required to use the `voice` or `sms` channel |
+| `VAPI_PHONE_NUMBER_ID` | — | Vapi phone number placing outbound calls |
+| `VAPI_WEBHOOK_URL` | — | Public URL of `POST /webhook/vapi`; inbound disabled if unset |
+| `VAPI_WEBHOOK_SECRET` | — | Shared secret sent back as `x-waybill-signature` |
+| `VAPI_SMS_PHONE_NUMBER_ID` | — | SMS-enabled US Twilio number imported into Vapi |
+
+## Example `.env`
+
+```sh
+# Required
+OPENAI_API_KEY=sk-...
+DATABASE_URL=postgres://user:pass@host:5432/dbname
+SUPPLIER_API_URL=https://your-supplier-sim.example.com
+
+# Agent tuning
+CONFIDENCE_THRESHOLD=0.9
+MAX_TOOL_ITERATIONS=15
+
+# Tracing (optional)
+LANGFUSE_PUBLIC_KEY=pk-...
+LANGFUSE_SECRET_KEY=sk-...
+LANGFUSE_BASE_URL=https://us.cloud.langfuse.com
+
+# Web search (optional)
+EXA_API_KEY=exa-...
+
+# Email channel (optional)
+AGENTMAIL_API_KEY=am-...
+AGENTMAIL_WEBHOOK_SECRET=whsec_...
+AGENTMAIL_INBOX_ID=inbox_...
+AGENTMAIL_INBOX_USERNAME=procurement
+
+# Voice/SMS channel (optional)
+VAPI_API_KEY=vapi-...
+VAPI_PHONE_NUMBER_ID=phone_...
+VAPI_WEBHOOK_URL=https://your-host/webhook/vapi
+VAPI_WEBHOOK_SECRET=shared-secret
+VAPI_SMS_PHONE_NUMBER_ID=phone_sms_...
+```
+
+See also:
+
+- [Database setup](/configuration/database)
+- [Tracing with Langfuse](/configuration/tracing)
+- [Channels and messaging](/guides/channels)

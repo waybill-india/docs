@@ -1,0 +1,33 @@
+---
+title: "Observability with Langfuse Tracing"
+sidebarTitle: "Tracing"
+description: "Trace waybill-arc intake, search, and supervisor stages with Langfuse. Set three env vars to enable observability."
+---
+
+waybill-arc wires Langfuse tracing through `src/tracing.ts` to capture agent behavior across the intake, search, and supervisor stages. When enabled, every LLM call and tool invocation is recorded so you can inspect execution paths, latencies, and token usage.
+
+## Enabling tracing
+
+Set all three environment variables in your `.env` file. Tracing is disabled when any of them is unset.
+
+| Variable | Description |
+| --- | --- |
+| `LANGFUSE_PUBLIC_KEY` | Langfuse public key |
+| `LANGFUSE_SECRET_KEY` | Langfuse secret key |
+| `LANGFUSE_BASE_URL` | Langfuse host, e.g. `https://us.cloud.langfuse.com` |
+
+## What gets traced
+
+- **Intake** — query resolution, clarifying questions, and final structured part spec
+- **Search** — supplier selection reasoning, RFQ dispatch, and parallel Exa web search
+- **Supervisor** — quote qualification, negotiation counter-offers, and award recommendation
+
+Each stage includes the underlying LLM calls and tool usage, so you can trace why a supplier was picked, what a quote was scored against, or how a counter-offer was shaped.
+
+<Tip>
+  Use a self-hosted or cloud Langfuse instance to debug non-deterministic agent behavior. Replaying a traced run against the same inputs makes it easier to spot prompt drift or tool failures.
+</Tip>
+
+See also:
+
+- [Environment variables](/configuration/environment)

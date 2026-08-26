@@ -1,47 +1,123 @@
 ---
-title: "Quickstart"
-description: "Begin with a guide on the fastest path to a successful outcome"
+title: "Quickstart: Run Your First Procurement Request"
+description: "Learn how to run through intake, search, and supervisor locally with waybill-arc. Install dependencies, configure env vars, and send your first request."
+sidebarTitle: "Quickstart"
 ---
 
-Describe how someone begins using your product. What is the first thing they need to do? Are there any prerequisites?
-
-A quickstart should take someone from zero to using your product. They'll get a quick win and a sense of what they can accomplish.
+This guide walks you through running a complete procurement request on waybill-arc from your local machine. You will start the server, submit a free-text query, handle any clarifying questions, kick off search and supervision, and poll until the run completes with an award recommendation.
 
 ## Prerequisites
 
-Before you begin, you must have:
+Before you begin, make sure you have the following ready:
 
-- Requirement one (for example, Node.js 18+, a free account, an API key)
-- Requirement two (for example, a compatible device, a compatible browser, a compatible operating system)
-
-## Get started
+- **Node.js \>= 20**
+- **A Postgres database** (used for LangGraph checkpoints and agent memory)
+- **An OpenAI API key**
+- **A running supplier simulator** exposing `GET /api/getAllSuppliers`
 
 <Steps>
-  <Step title="Install">
-    Describe how to install your product or sign up.
+  <Step title="Install dependencies">
+    Clone the repo and install packages:
 
     ```bash
-    npm install your-package
+    npm install
     ```
   </Step>
-  <Step title="Configure">
-    Describe any setup or configuration needed before first use.
+  <Step title="Configure your environment">
+    Create a `.env` file in the repo root with the required variables:
 
     ```bash
-    your-cli init
+    OPENAI_API_KEY=sk-...
+    DATABASE_URL=postgres://user:pass@host:5432/dbname
+    SUPPLIER_API_URL=https://your-supplier-sim.example.com
+    ```
+
+    Optional variables like `CONFIDENCE_THRESHOLD`, `MAX_TOOL_ITERATIONS`, and channel keys are covered in [Environment Variables](/configuration/environment).
+  </Step>
+  <Step title="Run migrations">
+    Set up the LangGraph checkpoint tables, channel tables, and the `web_search_runs` table:
+
+    ```bash
+    npm run migrate
     ```
   </Step>
-  <Step title="Run it">
-    Show the first thing a user does to see it working.
+  <Step title="Start the server">
+    Start the dev server in watch mode. It listens on port `3001`.
 
     ```bash
-    your-cli start
+    npm run dev
     ```
+
+    Verify it is running:
+
+    ```bash
+    curl http://localhost:3001/health
+    ```
+
+    Expected response:
+
+    ```json
+    { "status": "ok" }
+    ```
+  </Step>
+  <Step title="Start a request">
+    Submit a free-text purchase query to the intake endpoint:
+
+    ```bash
+    curl -X POST http://localhost:3001/intake \
+      -H "Content-Type: application/json" \
+      -d '{"query": "Need 2000 units of STM32F103C8T6"}'
+    ```
+
+    The response will include a `requestID` and a `status` of either `awaiting_answer` or `resolved`.
+  </Step>
+  <Step title="Answer clarifying questions if needed">
+    If the response shows `"status": "awaiting_answer"`, send an answer:
+
+    ```bash
+    curl -X POST http://localhost:3001/intake/299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21/answer \
+      -H "Content-Type: application/json" \
+      -d '{"answer": "Tape and reel", "questionID": "b1e494ec-..."}'
+    ```
+
+    Repeat until `status` becomes `resolved`.
+  </Step>
+  <Step title="Kick off search and supervisor">
+    Once intake is resolved, start supplier selection and RFQs:
+
+    ```bash
+    curl -X POST http://localhost:3001/search/299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21
+    ```
+
+    The response includes `selections`, `supervisor` status, and optionally a `webSearch` run.
+  </Step>
+  <Step title="Poll until completed">
+    Poll the supervisor endpoint every 5 to 10 seconds until `status` is `completed`:
+
+    ```bash
+    curl http://localhost:3001/supervisor/299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21
+    ```
+
+    Supplier replies resume the run automatically via webhook. The run can return to `awaiting_supplier_responses` more than once while negotiating counter-offers.
   </Step>
 </Steps>
 
-<Tip>
-  Give people a way to get help. This could be a link to a support page, a chat with a customer support agent, or a forum for your product.
+## Next steps
 
-  Example: Need help? Reach out to us at [support@yourcompany.com](mailto:support@yourcompany.com).
-</Tip>
+<CardGroup cols={2}>
+  <Card title="Request Lifecycle" icon="diagram-project" href="/concepts/request-lifecycle">
+    Understand how intake, search, and supervisor fit together.
+  </Card>
+
+  <Card title="UI Flow" icon="window" href="/guides/ui-flow">
+    Build a frontend that renders each stage and polls correctly.
+  </Card>
+
+  <Card title="API Reference" icon="code" href="/api-reference/introduction">
+    Browse endpoints, request shapes, and response payloads.
+  </Card>
+
+  <Card title="Environment Variables" icon="gear" href="/configuration/environment">
+    Configure channels, tracing, and optional behavior.
+  </Card>
+</CardGroup>

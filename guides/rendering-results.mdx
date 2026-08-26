@@ -1,0 +1,76 @@
+---
+title: "Rendering Quotes, Verdicts, and Awards"
+sidebarTitle: "Rendering Results"
+description: "Learn how to parse and display structured supervisor payloads, including quotes, qualification verdicts, and the final markdown award recommendation."
+---
+
+The waybill-arc supervisor returns a mix of prose messages and structured JSON payloads. A robust UI should read the typed payloads for quotes and verdicts, and render the final recommendation as markdown. This guide shows exactly how to extract and display each piece.
+
+## Reading structured payloads
+
+Two `messages` entries carry JSON arrays rather than prose. In both cases, the JSON starts at the first `[` in `content`.
+
+### Quotes
+
+The `quotes` message lists one entry per selected supplier. It is refreshed after each counter-offer round, so you must read the **last** `quotes` message in the array.
+
+| Field | Meaning |
+| --- | --- |
+| `supplierID` | The supplier identifier |
+| `quoted` | `true` if commercial terms were given; `false` means no quote yet |
+| `unitPrice`, `currency`, `moq`, `leadTime`, `packaging`, `dateCode`, `stockQuantity`, `balanceLeadTime` | Parsed terms; any may be `null` |
+| `notes` | Free-form notes from the supplier |
+| `raw` | The supplier’s reply verbatim |
+
+When `quoted` is `false`, render the supplier as awaiting a quote and fall back to displaying `raw`.
+
+### Qualification verdicts
+
+The `qualification_verdicts` message carries one verdict per supplier:
+
+| Disposition | Meaning |
+| --- | --- |
+| `approved` | Supplier passed qualification |
+| `excluded` | Supplier failed qualification and is out of the running |
+| `review` | Assessment was inconclusive or silent about this supplier |
+
+For `review`, use the `qualification` narrative message for details.
+
+## Displaying qualification verdicts
+
+Render verdicts as badges or filters:
+
+- **approved** — green, supplier is qualified
+- **excluded** — red, supplier is disqualified
+- **review** — yellow, inconclusive; link to the `qualification` narrative for context
+
+## Waiting states
+
+When the supervisor is paused for supplier replies, `interrupts` contains a `waitingFor` array of supplier IDs. Poll `GET /supervisor/:requestID` every 5–10 seconds until the status changes.
+
+## The final recommendation
+
+When `status` is `completed`, the last `messages` entry with `name: "negotiation"` is a markdown negotiation summary. It includes per-supplier outcomes and an award recommendation. Render it with a markdown renderer so headings, lists, and tables display correctly.
+
+The full `messages` array works as a timeline of the entire run.
+
+## TypeScript snippet
+
+Here is a small helper that extracts the last `quotes` message and parses its JSON:
+
+```typescript
+function getLatestQuotes(messages: { name: string; content: string }[]) {
+  const lastQuotes = messages
+    .filter((m) => m.name === "quotes")
+    .pop();
+
+  if (!lastQuotes) return null;
+
+  const jsonStart = lastQuotes.content.indexOf("[");
+  if (jsonStart === -1) return null;
+
+  return JSON.parse(lastQuotes.content.slice(jsonStart));
+}
+```
+
+For the exact message shapes, see [Structured Messages](/concepts/structured-messages). For the supervisor polling endpoint, see [GET /supervisor/:requestID](/api-reference/supervisor/get).

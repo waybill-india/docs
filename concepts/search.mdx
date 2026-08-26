@@ -1,0 +1,80 @@
+---
+title: "Search: Supplier Selection and Web Discovery"
+sidebarTitle: "Search"
+description: "Learn how waybill-arc search selects internal suppliers, hands off to the supervisor for RFQs, and runs an optional Exa web search for open-web candidates."
+---
+
+waybill-arc search runs after intake resolves a query. It picks internal suppliers from the supplier network, hands them off to the [supervisor](/concepts/supervisor) (which sends RFQs), and optionally starts a parallel Exa web search for open-web suppliers when `EXA_API_KEY` is configured.
+
+## What happens during search
+
+When you call `POST /search/:requestID`, the search agent:
+
+1. Reads the resolved query and selects the most relevant internal suppliers.
+2. Hands the selected suppliers to the supervisor, which immediately sends RFQs.
+3. If `EXA_API_KEY` is set, starts an Exa web search for marketplace listings and quotation-based suppliers on the open web.
+
+## Search response
+
+A successful search returns:
+
+```json
+{
+  "requestID": "299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21",
+  "selections": [
+    {
+      "supplierID": "SUP-00142",
+      "description": "Franchised distributor for STMicroelectronics",
+      "reasoning": "Explicitly handles STM32 and has stock in region"
+    }
+  ],
+  "supervisor": {
+    "status": "awaiting_supplier_responses",
+    "waitingFor": ["SUP-00142", "SUP-00187"]
+  },
+  "webSearch": { "runId": "agent_run_01jabc123", "status": "running" }
+}
+```
+
+- **`selections`** — why each internal supplier was chosen.
+- **`supervisor`** — the initial supervisor state after RFQs are sent. If no internal suppliers matched, this is `null`.
+- **`webSearch`** — present only when the Exa leg is enabled. Poll [`GET /search/:requestID/web`](/api-reference/search/web) for results.
+
+## Retry and idempotency
+
+After a successful handoff to the supervisor, a second call to `POST /search/:requestID` returns `409`. If the first call returned `200` with `supervisor: null` (no internal suppliers), you may retry the call and it will reuse the same web search run.
+
+## Web candidate kinds
+
+When the Exa search completes, candidates have one of two `kind` values:
+
+| Kind | Meaning | Fields to show |
+| --- | --- | --- |
+| `marketplace_listing` | Buy directly from a marketplace. | `productUrl`, `price` |
+| `quotation_supplier` | Reach out for a quote. | `contactEmail`, `contactPhone`, `website` |
+
+Any unverified field may be `null`. Web candidates are **not** part of the supervisor or RFQ flow. They are an independent outreach list you can present to the user alongside the internal supplier results.
+
+## Example web candidate
+
+```json
+{
+  "kind": "quotation_supplier",
+  "productUrl": null,
+  "price": null,
+  "supplierName": "Shenzhen Botai Automation Co.",
+  "location": "Shenzhen, China",
+  "contactEmail": "sales@botai.example.cn",
+  "contactPhone": "+86 755 …",
+  "website": "https://botai.example.cn",
+  "sources": [
+    { "url": "https://botai.example.cn/contact", "title": "Contact Us" }
+  ]
+}
+```
+
+## Related pages
+
+- [Start search](/api-reference/search/start)
+- [Web search results](/api-reference/search/web)
+- [Supervisor](/concepts/supervisor)

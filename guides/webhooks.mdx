@@ -1,0 +1,86 @@
+---
+title: "Webhooks: Supplier Replies and Vapi Events"
+sidebarTitle: "Webhooks"
+description: "Learn how inbound webhooks from the supplier gateway, AgentMail email, and Vapi voice or SMS resume the waybill-arc supervisor automatically."
+---
+
+waybill-arc pauses the supervisor while it waits for supplier replies. Two inbound webhook endpoints resume the run when replies arrive: one for the supplier gateway, and one for Vapi voice and SMS events. This guide covers how each webhook works, what payloads to expect, and how to configure them.
+
+## Supplier gateway
+
+`POST /webhook` is called by the supplier gateway when a supplier replies.
+
+**Request body**
+
+```json
+{
+  "requestID": "299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21",
+  "supplierID": "SUP-00142"
+}
+```
+
+`supplierID` is optional. The endpoint returns:
+
+```json
+{
+  "received": true
+}
+```
+
+This resumes the supervisor run automatically. A UI does not need to call this endpoint directly.
+
+## AgentMail email
+
+Inbound email replies are dispatched to the handler registered in `src/webhook.ts`, which resumes the supervisor.
+
+To register the webhook, run:
+
+```bash
+npm run channels:register-webhook -- https://your-host/webhook/email
+```
+
+Store the printed secret as `AGENTMAIL_WEBHOOK_SECRET`. AgentMail will sign inbound requests with this secret so the handler can verify them.
+
+## Vapi voice and SMS
+
+`POST /webhook/vapi` receives events from Vapi when a voice call ends or an SMS session is updated.
+
+### Authentication
+
+Vapi echoes back the `x-waybill-signature` header from the `server.headers` set on each transient assistant. The endpoint validates this header against `VAPI_WEBHOOK_SECRET`.
+
+### Request matching
+
+Requests are matched to a `(request_id, supplier_id)` pair through `channel_threads`:
+
+- For `voice`, the match uses the Vapi call ID.
+- For `sms`, the match uses the Vapi session ID.
+
+### Event handling
+
+Only two event types are acted on:
+
+- `end-of-call-report` — voice call ended, resume the supervisor
+- `session.updated` — SMS session updated, resume the supervisor
+
+### Response codes
+
+| Status | Meaning |
+| --- | --- |
+| `200 {}` | Event handled and the supervisor was resumed |
+| `204` | Event ignored (unhandled type, unmapped call or session, or nothing new from the supplier) |
+| `401` | Invalid webhook signature |
+| `503` | Vapi webhook is not configured (`VAPI_WEBHOOK_SECRET` is unset) |
+
+### Failure modes
+
+Failures that happen after a call is dispatched do not arrive as HTTP errors. Instead, they appear as `endedReason` on the `end-of-call-report`:
+
+- unanswered
+- voicemail
+- insufficient credits
+- international dialing blocked (on free Vapi numbers)
+
+Vapi exposes no SMS delivery status. Inbound SMS is US↔US only, so a non-US supplier can receive an SMS but cannot reply through Vapi.
+
+For endpoint reference, see [POST /webhook](/api-reference/webhooks/supplier) and [POST /webhook/vapi](/api-reference/webhooks/vapi). For channel setup and environment variables, see [Channels](/guides/channels).

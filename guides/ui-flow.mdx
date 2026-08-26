@@ -1,0 +1,80 @@
+---
+title: "Building a UI on the waybill-arc API"
+sidebarTitle: "UI Flow"
+description: "Learn how to build a chat or form UI that drives a purchase request through intake, search, and supervisor stages using the waybill-arc API."
+---
+
+waybill-arc exposes a stateful, poll-based API that you can drive from any frontend. This guide shows the exact request sequence and rendering rules to turn a free-text purchase query into a structured award recommendation.
+
+<Steps>
+  <Step title="Start intake">
+    Send the user’s query to `POST /intake`.
+
+    ```bash
+    curl -X POST http://localhost:3001/intake \
+      -H "Content-Type: application/json" \
+      -d '{"query": "Need 2000 units of STM32F103C8T6"}'
+    ```
+
+    The response mints a `requestID` (a UUID) and returns either `awaiting_answer` or `resolved`.
+  </Step>
+  <Step title="Clarify the request">
+    While `status` is `awaiting_answer`, render `question` to the user.
+
+    - When `options` is non-empty, show them as selectable answers. Respect `allowMultiple` for multi-select.
+    - Always show a free-text field alongside options. Free text is accepted even when options are present.
+    - Send the answer as a single string to `POST /intake/:requestID/answer`, including the `questionID`.
+
+    ```bash
+    curl -X POST http://localhost:3001/intake/299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21/answer \
+      -H "Content-Type: application/json" \
+      -d '{"answer": "Tape and reel", "questionID": "b1e494ec-…"}'
+    ```
+
+    Repeat until `status` becomes `resolved`. Use the `qa` array to rehydrate a chat-style transcript.
+  </Step>
+  <Step title="Trigger search and supervisor">
+    Once intake is resolved, call `POST /search/:requestID`.
+
+    ```bash
+    curl -X POST http://localhost:3001/search/299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21
+    ```
+
+    - If `supervisor` is non-null, the supervisor has sent RFQs and is `awaiting_supplier_responses`.
+    - If `webSearch` is present, start polling `GET /search/:requestID/web` for open-web supplier candidates.
+    - If `supervisor` is `null`, no internal suppliers matched and the web search is the only leg in flight.
+  </Step>
+  <Step title="Poll the supervisor">
+    Poll `GET /supervisor/:requestID` every 5–10 seconds until `status` is `completed`.
+
+    ```bash
+    curl http://localhost:3001/supervisor/299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21
+    ```
+
+    The run can re-enter `awaiting_supplier_responses` more than once: after the initial RFQs, and again during negotiation while waiting for counter-offer replies.
+  </Step>
+  <Step title="Render structured results">
+    Never parse prose to build a quote table. Read the structured payloads instead:
+
+    - `quotes` messages contain per-supplier pricing, stock, and terms.
+    - `qualification_verdicts` messages contain `approved`, `excluded`, or `review` dispositions.
+
+    See [Structured Messages](/concepts/structured-messages) for the exact JSON shapes.
+  </Step>
+  <Step title="Show the final recommendation">
+    The last `messages` entry with `name: "negotiation"` is a markdown award recommendation. Render it with a markdown renderer. The full `messages` array serves as a timeline.
+  </Step>
+</Steps>
+
+## Suggested screens
+
+Map the flow above to these UI views:
+
+- **New request** — a textarea that calls `POST /intake`.
+- **Clarification chat** — a Q&A loop while `awaiting_answer`; options as chips plus a free-text input.
+- **Review spec** — render `resolvedQuery` (part name, specs table, quantity, sources) with a "Find suppliers" button.
+- **Supplier discovery** — show `request.selections` with the reasoning for each contacted supplier.
+- **Run progress** — poll `GET /supervisor/:requestID`; display `waitingFor` badges, the `quotes` comparison, and the `messages` timeline.
+- **Result** — the final `negotiation` message as the recommendation, with the timeline available for review.
+
+For details on how to parse and render the supervisor output, see [Rendering Results](/guides/rendering-results).

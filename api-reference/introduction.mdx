@@ -1,0 +1,64 @@
+---
+title: "API Reference Overview"
+sidebarTitle: "Introduction"
+description: "Overview of the waybill-arc procurement agent API: base URLs, JSON bodies, no auth, and the 10 endpoints that move a request from intake to award."
+---
+
+waybill-arc is a procurement agent API that turns a free-text purchase request into a structured part spec, finds suppliers, and negotiates quotes. This reference covers every endpoint you need to start a request, answer clarifying questions, discover suppliers, and poll for the final award recommendation.
+
+All request and response bodies are JSON. There is no authentication on endpoints. The production deployment is currently behind Vercel Deployment Protection and returns 401, so use the local dev server for integration work.
+
+## Base URLs
+
+| Environment | URL |
+| --- | --- |
+| Local dev | `http://localhost:3001` |
+| Production | `https://waybill-arc-flax.vercel.app` |
+
+## Agent-backed timing
+
+Endpoints that invoke the LLM agent are slow. Plan your UI accordingly:
+
+| Endpoint | Typical duration |
+| --- | --- |
+| `POST /intake` | 5–60 seconds |
+| `POST /search/:requestID` | 5–30 seconds |
+
+Show loading states and poll `GET /supervisor/:requestID` every 5–10 seconds after search.
+
+## Endpoints
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/health` | Liveness check |
+| POST | `/intake` | Start a new request |
+| POST | `/intake/:requestID/answer` | Answer a pending clarifying question |
+| GET | `/intake/:requestID` | Current intake state |
+| POST | `/search/:requestID` | Select suppliers, send RFQs, and start web search |
+| GET | `/search/:requestID/web` | Poll web supplier candidates |
+| GET | `/supervisor/:requestID` | Poll procurement run state |
+| POST | `/supervisor` | Internal: start a run with an explicit payload |
+| POST | `/webhook` | Internal: supplier gateway resume hook |
+| POST | `/webhook/vapi` | Internal: Vapi voice or SMS resume hook |
+
+A `requestID` is a UUID minted by `POST /intake`. It identifies the request across intake, search, and supervisor stages.
+
+## Explore by stage
+
+<CardGroup cols={2}>
+  <Card title="Start a request" icon="play" href="/api-reference/intake/start">
+    POST /intake — submit a query and receive the first question or a resolved spec.
+  </Card>
+
+  <Card title="Run search" icon="magnifying-glass" href="/api-reference/search/start">
+    POST /search/:requestID — select suppliers, send RFQs, and optionally start Exa web search.
+  </Card>
+
+  <Card title="Poll supervisor" icon="clipboard-check" href="/api-reference/supervisor/get">
+    GET /supervisor/:requestID — poll until the run completes and read the award recommendation.
+  </Card>
+
+  <Card title="Errors" icon="triangle-exclamation" href="/api-reference/errors">
+    Validation, not-found, conflict, and webhook error shapes with status codes.
+  </Card>
+</CardGroup>

@@ -1,0 +1,79 @@
+---
+title: "Start a Supervisor Run Directly"
+sidebarTitle: "Start Run"
+description: "POST /supervisor starts a procurement run with an explicit payload. Normally handled automatically by POST /search/:requestID."
+---
+
+Start a supervisor run directly with an explicit payload. This is an internal and advanced endpoint: a typical UI does not need it because [`POST /search/:requestID`](/api-reference/search/start) creates the run automatically after selecting suppliers.
+
+## Endpoint
+
+```http
+POST /supervisor
+```
+
+## Request body
+
+<ParamField body="requestID" type="string" required>
+  The UUID of the resolved intake request.
+</ParamField>
+
+<ParamField body="selectedSupplierIDs" type="string[]" required>
+  IDs of the suppliers to contact.
+</ParamField>
+
+<ParamField body="selections" type="array">
+  Optional array of supplier selection objects with `supplierID`, `description`, and `reasoning`.
+</ParamField>
+
+<ParamField body="resolvedQuery" type="object" required>
+  The structured part spec produced by intake. See [Resolved Query](/concepts/resolved-query).
+</ParamField>
+
+## Example
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST http://localhost:3001/supervisor \
+  -H "Content-Type: application/json" \
+  -d '{
+    "requestID": "299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21",
+    "selectedSupplierIDs": ["SUP-00142", "SUP-00187"],
+    "resolvedQuery": {
+      "requestID": "299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21",
+      "rawQuery": "Need 2000 units of STM32F103C8T6 microcontrollers…",
+      "part": {
+        "name": "STM32F103C8T6 microcontroller",
+        "category": "Microcontroller",
+        "manufacturer": "STMicroelectronics",
+        "mpn": "STM32F103C8T6",
+        "specs": { "package": "LQFP-48", "flash_kb": 64, "rohs_compliant": true }
+      },
+      "quantity": { "value": 2000, "unit": "units", "packaging": "tray" },
+      "confidence": 0.96,
+      "unresolvedTerms": [],
+      "sources": [
+        { "url": "https://www.st.com/…", "note": "Official ST product page…" }
+      ]
+    }
+  }'
+```
+
+</CodeGroup>
+
+## Response
+
+Returns the same run state shape as [`GET /supervisor/:requestID`](/api-reference/supervisor/get).
+
+## Errors
+
+| Status | Body | Meaning |
+| --- | --- | --- |
+| 409 | (varies) | The request already exists in the supervisor. |
+
+## Related
+
+- [Start Supplier Search](/api-reference/search/start)
+- [Supervisor Concepts](/concepts/supervisor)
+- [Resolved Query](/concepts/resolved-query)

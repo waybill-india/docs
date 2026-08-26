@@ -1,0 +1,55 @@
+---
+title: "Intake: Resolving Free-Text Queries"
+sidebarTitle: "Intake"
+description: "Learn how waybill-arc intake turns free-text purchase requests into structured part specs through a clarifying Q&A loop with confidence scoring."
+---
+
+waybill-arc intake takes a free-text purchase request and resolves it into a structured `ResolvedQuery`. If the query is ambiguous, the intake agent asks clarifying questions until its confidence meets the `CONFIDENCE_THRESHOLD` (default 0.9). You answer questions through the API, and the loop continues until the spec is ready.
+
+## Intake statuses
+
+The intake run can be in one of four states:
+
+| Status | Meaning |
+| --- | --- |
+| `awaiting_answer` | The agent asked a clarifying question and is waiting for your answer. |
+| `resolved` | The query is fully structured and ready for [search](/concepts/search). |
+| `in_progress` | The agent is actively working (do not send an answer yet). |
+| `failed` | The intake run encountered an error. |
+
+## The QA loop
+
+When `status` is `awaiting_answer`, the response includes a `question` and metadata you should render in your UI:
+
+- **`options`** — a list of selectable answers. When `options` is `[]`, the question is open-ended and you should render a plain text input.
+- **`allowMultiple`** — when `true`, let the user pick more than one option.
+- **`questionID`** — a concurrency token. Include it when you submit the answer so the API can detect if the question changed while the user was typing.
+- **`qa`** — the full transcript of every question asked and every answer given so far. Use it to rehydrate a chat-style UI.
+
+Free text is always accepted, even when `options` are provided.
+
+## Confidence and best effort
+
+Intake tracks `confidence` on a 0–1 scale. If the agent cannot reach `CONFIDENCE_THRESHOLD` (default 0.9) after several iterations, it may return `bestEffort: true`. You should flag this in your UI so the user knows the spec may be incomplete or imprecise before proceeding to [search](/concepts/search).
+
+## Example awaiting\_answer response
+
+```json
+{
+  "requestID": "299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21",
+  "status": "awaiting_answer",
+  "question": "Which packaging do you need?",
+  "options": ["Tape and reel", "Tray", "Tube"],
+  "allowMultiple": false,
+  "questionID": "b1e494ec-8e2a-4c3b-9f1d-7a8b6c5d4e3f",
+  "qa": [
+    { "question": "Which packaging do you need?", "answer": null }
+  ]
+}
+```
+
+## Related pages
+
+- [Start intake](/api-reference/intake/start)
+- [Answer a question](/api-reference/intake/answer)
+- [ResolvedQuery](/concepts/resolved-query)

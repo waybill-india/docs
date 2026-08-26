@@ -1,0 +1,100 @@
+---
+title: "Get Web Search Candidates"
+sidebarTitle: "Web Candidates"
+description: "GET /search/:requestID/web polls the parallel Exa web search for open-web supplier candidates. Results include marketplace listings and quotation-based suppliers."
+---
+
+Poll the Exa web search run started by [`POST /search/:requestID`](/api-reference/search/start) to discover open-web suppliers. Runs take seconds to minutes and are capped at one hour. Terminal statuses are `completed`, `failed`, and `cancelled`. These candidates are an independent outreach list, not part of the supervisor RFQ flow.
+
+## Endpoint
+
+```http
+GET /search/:requestID/web
+```
+
+## Request
+
+<CodeGroup>
+
+```bash cURL
+curl http://localhost:3001/search/299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21/web
+```
+
+</CodeGroup>
+
+## Response
+
+### 200 — Web search status and candidates
+
+```json
+{
+  "requestID": "299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21",
+  "status": "queued | running | completed | failed | cancelled",
+  "candidates": [
+    {
+      "kind": "marketplace_listing",
+      "productUrl": "https://www.indiamart.com/proddetail/…",
+      "price": "₹385 / piece",
+      "supplierName": "Sharma Electro Components Pvt Ltd",
+      "location": "Delhi, India",
+      "contactEmail": null,
+      "contactPhone": null,
+      "website": "https://sharmaelectro.example.com",
+      "sources": [{ "url": "https://www.indiamart.com/…", "title": "…" }]
+    },
+    {
+      "kind": "quotation_supplier",
+      "productUrl": null,
+      "price": null,
+      "supplierName": "Shenzhen Botai Automation Co.",
+      "location": "Shenzhen, China",
+      "contactEmail": "sales@botai.example.cn",
+      "contactPhone": "+86 755 …",
+      "website": "https://botai.example.cn",
+      "sources": [{ "url": "https://botai.example.cn/contact", "title": "…" }]
+    }
+  ],
+  "costDollars": 0.34,
+  "stopReason": "schema_satisfied"
+}
+```
+
+<ResponseField name="status" type="string">
+  `queued`, `running`, `completed`, `failed`, or `cancelled`. The last three are terminal.
+</ResponseField>
+
+<ResponseField name="candidates" type="array">
+  Empty until `status` is `completed`. Each entry has a `kind`, supplier details, and `sources`.
+</ResponseField>
+
+<ResponseField name="kind" type="string">
+  `marketplace_listing` means you can buy directly: `productUrl` and `price` are set. `quotation_supplier` means you must reach out for a quote: `contactEmail`, `contactPhone`, and `website` are set. Any unverified field is `null`.
+</ResponseField>
+
+<ResponseField name="sources" type="array">
+  Pages where each candidate was found.
+</ResponseField>
+
+<ResponseField name="costDollars" type="number">
+  Estimated search cost in USD.
+</ResponseField>
+
+<ResponseField name="stopReason" type="string">
+  Why the run stopped, for example `schema_satisfied`.
+</ResponseField>
+
+## Errors
+
+| Status | Body | Meaning |
+| --- | --- | --- |
+| 404 | `{ "error": "No web search run for this request" }` | The request has no web search run. Start one with [`POST /search/:requestID`](/api-reference/search/start). |
+| 502 | `{ "error": "Web search provider error" }` | Transient provider error. Keep polling. |
+
+## Polling guidance
+
+Poll every 5–10 seconds. Do not stop polling on `502`; retry until you hit a terminal status or receive candidates.
+
+## Related
+
+- [Start Supplier Search](/api-reference/search/start)
+- [Search Concepts](/concepts/search)

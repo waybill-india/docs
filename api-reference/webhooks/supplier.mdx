@@ -1,0 +1,59 @@
+---
+title: "Supplier Reply Webhook"
+sidebarTitle: "Supplier Reply"
+description: "POST /webhook receives supplier gateway replies and resumes the supervisor run automatically. Internal endpoint, not needed for UI integration."
+---
+
+The supplier gateway calls `POST /webhook` when a supplier replies to an RFQ. This resumes the supervisor run automatically so it can qualify quotes, negotiate counter-offers, and progress toward the award recommendation. A UI does not need to call this endpoint.
+
+## Endpoint
+
+```http
+POST /webhook
+```
+
+## Request body
+
+<ParamField body="requestID" type="string" required>
+  The UUID of the procurement request.
+</ParamField>
+
+<ParamField body="supplierID" type="string">
+  Optional supplier identifier.
+</ParamField>
+
+## Example
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST http://localhost:3001/webhook \
+  -H "Content-Type: application/json" \
+  -d '{
+    "requestID": "299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21",
+    "supplierID": "SUP-00142"
+  }'
+```
+
+</CodeGroup>
+
+## Response
+
+### 200 — Event received
+
+```json
+{
+  "received": true
+}
+```
+
+## Errors
+
+| Status | Body | Meaning |
+| --- | --- | --- |
+| 404 | `{ "error": "Request not found" }` | The `requestID` does not exist. |
+
+## Related
+
+- [Webhooks Guide](/guides/webhooks)
+- [Supervisor Concepts](/concepts/supervisor)

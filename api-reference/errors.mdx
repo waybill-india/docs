@@ -1,0 +1,115 @@
+---
+title: "Error Codes and Response Shapes"
+sidebarTitle: "Errors"
+description: "Error envelopes returned by waybill-arc: validation issues, not-found, conflict, webhook auth failures, and what to do for each status code."
+---
+
+waybill-arc returns structured error bodies so your integration can react programmatically. Validation failures include Zod issue arrays. Resource errors carry a single `error` string. Webhook endpoints return auth and configuration errors with distinct status codes.
+
+## Error envelopes
+
+### Validation error (400)
+
+Returned when the request body fails Zod schema validation.
+
+```json
+{
+  "errors": [
+    { "message": "Required", "path": ["query"] }
+  ]
+}
+```
+
+### Not found (404)
+
+Returned when a `requestID` does not exist.
+
+```json
+{
+  "error": "Request not found"
+}
+```
+
+### Conflict (409)
+
+Returned when the request state does not allow the operation.
+
+```json
+{
+  "error": "Request is not awaiting an answer"
+}
+```
+
+A special 409 is returned when the pending question changed since the answer was written. Re-render the question and resubmit with the new `questionID`.
+
+```json
+{
+  "error": "The pending question has changed since this answer was written",
+  "question": "Which packaging do you need?",
+  "options": ["Tape and reel", "Tray", "Tube"],
+  "allowMultiple": false,
+  "questionID": "b1e494ec…"
+}
+```
+
+### Unprocessable entity (422)
+
+Returned by `POST /search/:requestID` when no plausible suppliers were found and the web search leg is unavailable.
+
+```json
+{
+  "requestID": "299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21",
+  "error": "No plausible suppliers found for this part — not producing a handoff payload"
+}
+```
+
+### Bad gateway (502)
+
+Returned by `GET /search/:requestID/web` when the Exa web search provider encounters an error. This is transient: keep polling.
+
+```json
+{
+  "error": "Web search provider error"
+}
+```
+
+### Unauthorized (401)
+
+Returned by `POST /webhook/vapi` when the `x-waybill-signature` header does not match the configured secret.
+
+```json
+{
+  "error": "Invalid webhook signature"
+}
+```
+
+### Service unavailable (503)
+
+Returned by `POST /webhook/vapi` when `VAPI_WEBHOOK_SECRET` is not configured.
+
+```json
+{
+  "error": "Vapi webhook is not configured"
+}
+```
+
+## Common error scenarios
+
+| Endpoint | Status | Meaning |
+| --- | --- | --- |
+| `POST /intake` | 400 | `query` is missing or empty |
+| `POST /intake/:requestID/answer` | 404 | `requestID` does not exist |
+| `POST /intake/:requestID/answer` | 409 | Request already resolved or still running |
+| `POST /intake/:requestID/answer` | 409 | Question changed since render; resubmit with new `questionID` |
+| `GET /intake/:requestID` | 404 | `requestID` does not exist |
+| `POST /search/:requestID` | 404 | `requestID` does not exist |
+| `POST /search/:requestID` | 409 | Intake is not resolved yet |
+| `POST /search/:requestID` | 409 | Request was already handed off to the supervisor |
+| `POST /search/:requestID` | 422 | No plausible suppliers found and web search is unavailable |
+| `GET /search/:requestID/web` | 404 | No web search run exists for this request |
+| `GET /search/:requestID/web` | 502 | Exa provider error; keep polling |
+| `GET /supervisor/:requestID` | 404 | `requestID` does not exist |
+| `POST /webhook/vapi` | 401 | Invalid `x-waybill-signature` |
+| `POST /webhook/vapi` | 503 | Vapi webhook secret is not configured |
+
+For details on how requests move through stages and when these errors can occur, see [Request lifecycle](/concepts/request-lifecycle).

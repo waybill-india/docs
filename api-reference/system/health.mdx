@@ -1,0 +1,29 @@
+---
+title: "Health Check Endpoint"
+sidebarTitle: "Health"
+description: "Check whether the waybill-arc server is alive with GET /health. Returns 200 and a simple status object."
+---
+
+Use `GET /health` to verify that the waybill-arc server is running and responsive. This is useful for container health checks, local dev verification, and uptime monitoring.
+
+## Request
+
+```bash
+curl http://localhost:3001/health
+```
+
+## Response
+
+<ResponseField name="status" type="string">
+  Always `"ok"` when the server is healthy.
+</ResponseField>
+
+```json
+{
+  "status": "ok"
+}
+```
+
+## Errors
+
+This endpoint does not return errors under normal circumstances. If the server is unreachable, the connection itself will fail.

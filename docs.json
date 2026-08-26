@@ -1,11 +1,11 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mintlify Starter Kit",
+  "theme": "sequoia",
+  "name": "waybill-arc",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#0F766E",
+    "light": "#14B8A6",
+    "dark": "#0F766E"
   },
   "favicon": "/favicon.svg",
   "navigation": {
@@ -18,36 +18,101 @@
         ]
       }
     ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "index",
+              "quickstart",
+              "concepts/request-lifecycle"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/intake",
+              "concepts/search",
+              "concepts/supervisor",
+              "concepts/resolved-query",
+              "concepts/structured-messages"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/ui-flow",
+              "guides/rendering-results",
+              "guides/channels",
+              "guides/webhooks"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "configuration/environment",
+              "configuration/database",
+              "configuration/tracing"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "api-reference/introduction",
+              "api-reference/errors"
+            ]
+          },
+          {
+            "group": "Intake",
+            "pages": [
+              "api-reference/intake/start",
+              "api-reference/intake/answer",
+              "api-reference/intake/get"
+            ]
+          },
+          {
+            "group": "Search",
+            "pages": [
+              "api-reference/search/start",
+              "api-reference/search/web"
+            ]
+          },
+          {
+            "group": "Supervisor",
+            "pages": [
+              "api-reference/supervisor/get",
+              "api-reference/supervisor/start"
+            ]
+          },
+          {
+            "group": "Webhooks",
+            "pages": [
+              "api-reference/webhooks/supplier",
+              "api-reference/webhooks/vapi"
+            ]
+          },
+          {
+            "group": "System",
+            "pages": [
+              "api-reference/system/health"
+            ]
+          }
+        ]
+      }
+    ]
   },
   "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
     "primary": {
       "type": "button",
-      "label": "Dashboard",
-      "href": "https://app.mintlify.com"
+      "label": "GitHub",
+      "href": "https://github.com/waybill-india/waybill-arc"
     }
   },
   "contextual": {
@@ -55,18 +120,7 @@
       "copy",
       "view",
       "chatgpt",
-      "claude",
-      "perplexity",
-      "mcp",
-      "cursor",
-      "vscode"
+      "claude"
     ]
-  },
-  "footer": {
-    "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
-    }
   }
 }

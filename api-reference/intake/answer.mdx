@@ -1,0 +1,90 @@
+---
+title: "Answer a Clarifying Question"
+sidebarTitle: "Answer Question"
+description: "Submit an answer to a pending intake question with POST /intake/:requestID/answer. The agent may ask another question or return a resolved spec."
+---
+
+After `POST /intake` returns `awaiting_answer`, submit the user's answer to `POST /intake/:requestID/answer`. The intake agent either asks another clarifying question or resolves the query into a structured part spec. Include the `questionID` from the previous response so the server can detect stale answers.
+
+## Request
+
+`POST /intake/:requestID/answer`
+
+<ParamField path="requestID" type="string" required>
+  The UUID returned by `POST /intake`.
+</ParamField>
+
+<ParamField body="answer" type="string" required>
+  The user's answer. Free text is always accepted, even when options were provided.
+</ParamField>
+
+<ParamField body="questionID" type="string">
+  The `questionID` from the most recent `awaiting_answer` response. Recommended to prevent stale-answer conflicts.
+</ParamField>
+
+```bash
+curl -X POST http://localhost:3001/intake/299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21/answer \
+  -H "Content-Type: application/json" \
+  -d '{"answer": "Tray", "questionID": "b1e494ec…"}'
+```
+
+## Response
+
+The response is `200` and has the same two shapes as `POST /intake`: `awaiting_answer` or `resolved`. See [Start a Request](/api-reference/intake/start) for the full field descriptions and JSON examples.
+
+### Awaiting answer
+
+```json
+{
+  "requestID": "299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21",
+  "status": "awaiting_answer",
+  "question": "What is your target delivery date?",
+  "options": [],
+  "allowMultiple": false,
+  "questionID": "c2f585fd…",
+  "qa": [
+    { "question": "Which packaging do you need?", "answer": "Tray" },
+    { "question": "What is your target delivery date?", "answer": null }
+  ]
+}
+```
+
+### Resolved
+
+```json
+{
+  "requestID": "299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21",
+  "status": "resolved",
+  "resolvedQuery": { … },
+  "bestEffort": false,
+  "qa": [ … ]
+}
+```
+
+## Errors
+
+| Status | Body | Meaning |
+| --- | --- | --- |
+| 404 | `{ "error": "Request not found" }` | The `requestID` does not exist. |
+| 409 | `{ "error": "Request is not awaiting an answer" }` | The request is already resolved or still running. |
+| 409 | Question changed payload (see below) | The pending question changed since the answer was written. Re-render and resubmit. |
+
+### Question changed (409)
+
+When the question changed between render and submit, the server returns the current question so you can re-render and resubmit with the new `questionID`.
+
+```json
+{
+  "error": "The pending question has changed since this answer was written",
+  "question": "Which packaging do you need?",
+  "options": ["Tape and reel", "Tray", "Tube"],
+  "allowMultiple": false,
+  "questionID": "b1e494ec…"
+}
+```
+
+## Next steps
+
+- If still `awaiting_answer`, call this endpoint again with the new `questionID`.
+- If `resolved`, proceed to [POST /search/:requestID](/api-reference/search/start).
+- Read more about the intake stage in [Intake](/concepts/intake).

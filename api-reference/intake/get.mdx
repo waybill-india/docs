@@ -1,0 +1,94 @@
+---
+title: "Get Intake State"
+sidebarTitle: "Get Intake"
+description: "Poll GET /intake/:requestID to read the current intake status, pending question, transcript, and resolved query for any request."
+---
+
+Use `GET /intake/:requestID` to read the current state of an intake request at any time. This is useful for rehydrating a UI after a page reload, checking whether a request is still `in_progress`, or inspecting the full clarification transcript and resolved query.
+
+## Request
+
+`GET /intake/:requestID`
+
+<ParamField path="requestID" type="string" required>
+  The UUID returned by `POST /intake`.
+</ParamField>
+
+```bash
+curl http://localhost:3001/intake/299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21
+```
+
+## Response
+
+<ResponseField name="requestID" type="string">
+  The request UUID.
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  One of `awaiting_answer`, `resolved`, `in_progress`, or `failed`.
+</ResponseField>
+
+<ResponseField name="rawQuery" type="string">
+  The original free-text query submitted to `POST /intake`.
+</ResponseField>
+
+<ResponseField name="question" type="string | null">
+  The pending question when `status` is `awaiting_answer`; otherwise `null`.
+</ResponseField>
+
+<ResponseField name="options" type="string[]">
+  Selectable answers for the pending question. Empty when the question is open-ended.
+</ResponseField>
+
+<ResponseField name="allowMultiple" type="boolean">
+  Whether multiple options may be selected.
+</ResponseField>
+
+<ResponseField name="questionID" type="string | null">
+  Identifier for the pending question; `null` when there is no pending question.
+</ResponseField>
+
+<ResponseField name="qa" type="array">
+  Full clarification transcript. Each entry has `question` and `answer` (null while pending).
+</ResponseField>
+
+<ResponseField name="resolvedQuery" type="object | null">
+  Structured part spec. Present only when `status` is `resolved`. See [ResolvedQuery](/concepts/resolved-query) for the full shape.
+</ResponseField>
+
+<ResponseField name="bestEffort" type="boolean">
+  `true` when intake resolved below its confidence threshold.
+</ResponseField>
+
+<ResponseField name="iterations" type="number">
+  Number of agent iterations consumed so far.
+</ResponseField>
+
+```json
+{
+  "requestID": "299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21",
+  "status": "awaiting_answer",
+  "rawQuery": "Need 2000 units of STM32F103C8T6…",
+  "question": "Which packaging do you need?",
+  "options": ["Tape and reel", "Tray", "Tube"],
+  "allowMultiple": false,
+  "questionID": "b1e494ec…",
+  "qa": [
+    { "question": "Which packaging do you need?", "answer": null }
+  ],
+  "resolvedQuery": null,
+  "bestEffort": false,
+  "iterations": 3
+}
+```
+
+## Errors
+
+| Status | Body |
+| --- | --- |
+| 404 | `{ "error": "Request not found" }` |
+
+## Related pages
+
+- Learn how intake works in [Intake](/concepts/intake).
+- Understand the structured output in [ResolvedQuery](/concepts/resolved-query).

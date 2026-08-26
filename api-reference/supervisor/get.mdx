@@ -1,0 +1,123 @@
+---
+title: "Get Supervisor Run State"
+sidebarTitle: "Get Run"
+description: "GET /supervisor/:requestID polls the procurement run state until it completes. Contains quotes, qualification verdicts, and the final award recommendation."
+---
+
+Poll the supervisor run to track RFQ progress, view incoming quotes, and read the final award recommendation. Call this endpoint after [`POST /search/:requestID`](/api-reference/search/start) returns a non-null `supervisor` object, then poll every 5–10 seconds until `status` is `completed`.
+
+## Endpoint
+
+```http
+GET /supervisor/:requestID
+```
+
+## Request
+
+<CodeGroup>
+
+```bash cURL
+curl http://localhost:3001/supervisor/299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21
+```
+
+</CodeGroup>
+
+## Response
+
+### 200 — Run state
+
+```json
+{
+  "requestID": "299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21",
+  "status": "awaiting_supplier_responses | in_progress | completed",
+  "request": {
+    "requestID": "…",
+    "selectedSupplierIDs": ["SUP-00142"],
+    "selections": [
+      {
+        "supplierID": "SUP-00142",
+        "description": "…the supplier's own profile from the supplier network…",
+        "reasoning": "Franchised distributor explicitly handles STM32…"
+      }
+    ],
+    "resolvedQuery": { }
+  },
+  "next": "…internal routing hint, ignore…",
+  "interrupts": [ { "waitingFor": ["SUP-00142"] } ],
+  "messages": [
+    { "type": "human | ai | tool", "name": "rfq | supplier_responses | quotes | qualification | qualification_verdicts | counter_responses | negotiation | …", "content": "…" }
+  ]
+}
+```
+
+<ResponseField name="request.selections" type="array">
+  Carries why each supplier was picked so the shortlist survives a page reload. It is `[]` for runs started before selections were persisted; fall back to `selectedSupplierIDs`.
+</ResponseField>
+
+<ResponseField name="interrupts" type="array">
+  Lists suppliers the run is currently waiting for. Use this to show "waiting for reply" badges.
+</ResponseField>
+
+<ResponseField name="messages" type="array">
+  A timeline of the run. When `status` is `completed`, the last entry with `name: "negotiation"` contains the markdown award recommendation and per-supplier outcomes.
+</ResponseField>
+
+## Reading structured payloads
+
+Two `messages` entries carry JSON rather than prose. In both, the JSON array starts at the first `[` in `content`.
+
+### `name: "quotes"`
+
+One entry per selected supplier. Read the **last** `quotes` message, because it is refreshed after counter-offer rounds.
+
+```json
+[
+  {
+    "supplierID": "SUP-00142",
+    "quoted": true,
+    "unitPrice": 1.87,
+    "currency": "USD",
+    "moq": "1,000 pcs",
+    "leadTime": "6 weeks",
+    "packaging": "Tape and reel",
+    "dateCode": "2023+",
+    "stockQuantity": 1200,
+    "balanceLeadTime": "800 pcs in 10 weeks",
+    "notes": "Authorized distributor, full traceability",
+    "raw": "…the supplier's reply verbatim…"
+  }
+]
+```
+
+Every field except `supplierID`, `quoted`, and `raw` may be `null` when the supplier did not state it. `quoted: false` means no commercial terms were given; render the supplier as awaiting a quote rather than dropping it, and fall back to `raw`.
+
+### `name: "qualification_verdicts"`
+
+One verdict per selected supplier.
+
+```json
+[
+  {
+    "supplierID": "SUP-00142",
+    "disposition": "approved | excluded | review",
+    "reasons": [
+      "Authorized distributor for STMicroelectronics",
+      "RoHS documentation provided"
+    ]
+  }
+]
+```
+
+`review` means the assessment was inconclusive or silent about that supplier. The `qualification` message holds the full narrative for a details view.
+
+## Errors
+
+| Status | Body | Meaning |
+| --- | --- | --- |
+| 404 | `{ "error": "Request not found" }` | The `requestID` does not exist. |
+
+## Related
+
+- [Supervisor Concepts](/concepts/supervisor)
+- [Structured Messages](/concepts/structured-messages)
+- [Rendering Results](/guides/rendering-results)

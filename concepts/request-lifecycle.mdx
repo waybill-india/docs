@@ -1,0 +1,48 @@
+---
+title: "Request Lifecycle: From Query to Award Recommendation"
+sidebarTitle: "Request Lifecycle"
+description: "Learn how a waybill-arc request moves through intake, search, and supervisor stages, and how statuses change as the procurement agent progresses toward an award recommendation."
+---
+
+A waybill-arc procurement request is identified by a single `requestID`, a UUID minted when you call `POST /intake`. That ID stays with the request through every subsequent stage, so you can poll and resume at any point. The lifecycle has three stages: intake turns a free-text query into a structured spec, search selects suppliers and starts RFQs, and the supervisor manages replies, qualification, negotiation, and the final award recommendation.
+
+## Intake
+
+The intake stage resolves a free-text query into a structured part spec. If the agent needs more information, it asks a clarifying question and waits for your answer.
+
+Intake statuses:
+
+- `awaiting_answer` — the agent asked a question and is waiting for a response
+- `resolved` — the spec is complete and ready for search
+- `in_progress` — the agent is still working
+- `failed` — the intake run encountered an error
+
+You start intake with `POST /intake`, answer questions with `POST /intake/:requestID/answer`, and check the current state with `GET /intake/:requestID`. Once the status is `resolved`, the request is ready to move to search.
+
+## Search
+
+The search stage selects internal suppliers from your supplier network and hands them off to the supervisor, which sends RFQs. When `EXA_API_KEY` is configured, it also starts a parallel Exa web search for open-web suppliers.
+
+You trigger search with `POST /search/:requestID`. The response tells you which suppliers were selected, the current supervisor status, and whether a web search run is in progress. If no internal suppliers match but a web search is running, `supervisor` is `null` and you should poll `GET /search/:requestID/web` instead of the supervisor endpoint.
+
+## Supervisor
+
+The supervisor stage awaits supplier replies, qualifies incoming quotes, negotiates with counter-offers when needed, and produces a final award recommendation.
+
+Supervisor statuses:
+
+- `awaiting_supplier_responses` — RFQs or counter-offers have been sent and the agent is waiting for replies
+- `in_progress` — the agent is actively processing replies or preparing the next step
+- `completed` — the run finished and the award recommendation is available
+
+The supervisor can return to `awaiting_supplier_responses` more than once: first after the initial RFQs, and again during negotiation when counter-offers are sent out. Supplier replies arrive via `POST /webhook` and resume the run automatically. Poll `GET /supervisor/:requestID` every 5 to 10 seconds until the status is `completed`.
+
+<Note>
+  Agent-backed endpoints are slow because they involve LLM calls. Intake typically takes 5 to 60 seconds, and search takes 5 to 30 seconds. Show loading states in your UI while polling.
+</Note>
+
+## Related concepts
+
+- [Intake](/concepts/intake)
+- [Search](/concepts/search)
+- [Supervisor](/concepts/supervisor)
