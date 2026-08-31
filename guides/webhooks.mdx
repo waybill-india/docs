@@ -1,10 +1,10 @@
 ---
-title: "Webhooks: Supplier Replies and Vapi Events"
+title: "Webhooks: Supplier Replies, Vapi, and WhatsApp Events"
 sidebarTitle: "Webhooks"
-description: "Learn how inbound webhooks from the supplier gateway, AgentMail email, and Vapi voice or SMS resume the waybill-arc supervisor automatically."
+description: "Learn how inbound webhooks from the supplier gateway, AgentMail email, Vapi voice or SMS, and the Meta WhatsApp Cloud API resume the waybill-arc supervisor automatically."
 ---
 
-waybill-arc pauses the supervisor while it waits for supplier replies. Two inbound webhook endpoints resume the run when replies arrive: one for the supplier gateway, and one for Vapi voice and SMS events. This guide covers how each webhook works, what payloads to expect, and how to configure them.
+waybill-arc pauses the supervisor while it waits for supplier replies. Three inbound webhook endpoints resume the run when replies arrive: one for the supplier gateway, one for Vapi voice and SMS events, and one for Meta WhatsApp Cloud API events. This guide covers how each webhook works, what payloads to expect, and how to configure them.
 
 ## Supplier gateway
 
@@ -83,4 +83,34 @@ Failures that happen after a call is dispatched do not arrive as HTTP errors. In
 
 Vapi exposes no SMS delivery status. Inbound SMS is US↔US only, so a non-US supplier can receive an SMS but cannot reply through Vapi.
 
-For endpoint reference, see [POST /webhook](/api-reference/webhooks/supplier) and [POST /webhook/vapi](/api-reference/webhooks/vapi). For channel setup and environment variables, see [Channels](/guides/channels).
+## WhatsApp (Meta Cloud API)
+
+`GET` and `POST /webhook/whatsapp` form the Meta WhatsApp Cloud API webhook. Meta calls this endpoint, not you. Point your Meta app's webhook URL here.
+
+### Verification handshake
+
+Meta sends a `GET` request when you register the webhook URL. The endpoint echoes `hub.challenge` when `hub.verify_token` matches `WHATSAPP_WEBHOOK_VERIFY_TOKEN`, and returns `403` otherwise.
+
+### Authentication
+
+Meta signs every `POST` with the `x-hub-signature-256` header, an HMAC-SHA256 hex digest of the raw request body keyed by `WHATSAPP_APP_SECRET`. The endpoint rejects requests whose signature does not match.
+
+### Event handling
+
+Every event is persisted to the WhatsApp message store. Inbound text messages are then matched to a request/supplier pair through `channel_threads` on the sender's `waId` and resume the supervisor. When several requests share the same `waId`, the most recently created request wins. Delivery statuses, unmapped senders, redeliveries of an already-recorded message, and non-text messages are recorded but deliberately ignored.
+
+### Response codes
+
+| Status | Meaning |
+| --- | --- |
+| `200 OK` | Event processed, including deliberately ignored events |
+| `400` | Malformed JSON |
+| `401` | Invalid signature |
+| `500` | Persistence or agent dispatch failed; Meta redelivers with backoff, and the last-message-ID dedupe keeps redeliveries from double-resuming the run |
+| `503` | WhatsApp channel is not configured (`WHATSAPP_*` variables unset) |
+
+### Failure modes
+
+Outbound send failures that happen after Meta accepts a message do not arrive as HTTP errors. Most notably, a free-form text sent outside the 24-hour service window fails with Meta error `131047`. These failures arrive as status events and are recorded on the message, so they never surface to the agent.
+
+For endpoint reference, see [POST /webhook](/api-reference/webhooks/supplier), [POST /webhook/vapi](/api-reference/webhooks/vapi), and [GET + POST /webhook/whatsapp](/api-reference/webhooks/whatsapp). For channel setup and environment variables, see [Channels](/guides/channels).

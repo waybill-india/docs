@@ -1,10 +1,10 @@
 ---
-title: "Channels: Email, Voice, and SMS Outreach"
+title: "Channels: Email, Voice, SMS, and WhatsApp Outreach"
 sidebarTitle: "Channels"
-description: "Learn how waybill-arc sends RFQs over email, voice, and SMS through a unified channel layer, and how to register contacts and configure each provider."
+description: "Learn how waybill-arc sends RFQs over email, voice, SMS, and WhatsApp through a unified channel layer, and how to register contacts and configure each provider."
 ---
 
-waybill-arc sends RFQs to suppliers through a unified messaging layer in `src/channels/`. Each channel client (email via AgentMail, voice and SMS via Vapi, the supplier simulator, and WhatsApp later) implements the same `ChannelClient` contract. `src/channels/index.ts` is the only surface callers touch, so inbound replies and outbound sends share one interface regardless of the underlying provider.
+waybill-arc sends RFQs to suppliers through a unified messaging layer in `src/channels/`. Each channel client (email via AgentMail, voice and SMS via Vapi, WhatsApp via the Meta Cloud API, and the supplier simulator) implements the same `ChannelClient` contract. `src/channels/index.ts` is the only surface callers touch, so inbound replies and outbound sends share one interface regardless of the underlying provider.
 
 ## Unified channel API
 
@@ -44,9 +44,12 @@ INSERT INTO supplier_contacts (supplier_id, channel, address)
 VALUES
   ('SUP-00142', 'email', 'sales@supplier.example'),
   ('SUP-00142', 'voice', '+14155550123'),
-  ('SUP-00142', 'sms', '+14155550123')
+  ('SUP-00142', 'sms', '+14155550123'),
+  ('SUP-00142', 'whatsapp', '14155550123')
 ON CONFLICT (supplier_id, channel) DO UPDATE SET address = EXCLUDED.address;
 ```
+
+WhatsApp addresses are stored as digits only (`14155550123`). The client strips anything else, so a `+`-prefixed row also works.
 
 ## Threads
 
@@ -55,6 +58,7 @@ ON CONFLICT (supplier_id, channel) DO UPDATE SET address = EXCLUDED.address;
 - For `voice`, the thread is the most recent Vapi call ID.
 - For `sms`, the thread is the Vapi session ID.
 - For `email`, the thread is managed by AgentMail.
+- For `whatsapp`, the thread is the supplier's `waId` (their WhatsApp number). When several requests share the same `waId`, an inbound reply resolves to the most recently created request.
 
 ## Email (AgentMail)
 
@@ -109,5 +113,52 @@ Required environment variables:
 | `VAPI_SMS_PHONE_NUMBER_ID` | SMS-enabled US Twilio number imported into Vapi |
 | `VAPI_WEBHOOK_URL` | Public URL of `POST /webhook/vapi` |
 | `VAPI_WEBHOOK_SECRET` | Shared secret echoed back as `x-waybill-signature` |
+
+## WhatsApp (Meta Cloud API)
+
+The `whatsapp` channel talks to the Meta WhatsApp Cloud API directly. waybill-arc owns the Meta credentials and the message store: a Prisma-managed `whatsapp` Postgres schema at `WHATSAPP_DATABASE_URL` that holds contacts, messages, status history, and idempotency keys. See [Database setup](/configuration/database) for the migration commands.
+
+Configuration is all-or-nothing. Set none of the variables to disable the channel, or set all seven required ones:
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `WHATSAPP_ACCESS_TOKEN` | — | Meta System User token for the Cloud API |
+| `WHATSAPP_PHONE_NUMBER_ID` | — | Numeric phone number ID (not the phone number) |
+| `WHATSAPP_BUSINESS_ACCOUNT_ID` | — | The WhatsApp Business Account (WABA) ID |
+| `WHATSAPP_APP_SECRET` | — | Verifies `x-hub-signature-256` on the Meta webhook |
+| `WHATSAPP_WEBHOOK_VERIFY_TOKEN` | — | Echoed in the Meta webhook GET handshake |
+| `WHATSAPP_API_KEY` | — | Bearer key protecting the `/api/*` channel endpoints |
+| `WHATSAPP_DATABASE_URL` | — | Postgres holding the `whatsapp` schema (message store) |
+| `WHATSAPP_DIRECT_URL` | — | Optional non-pooled URL used by `prisma migrate` |
+| `GRAPH_API_BASE_URL` | `https://graph.facebook.com` | Graph API host |
+| `GRAPH_API_VERSION` | `v26.0` | Graph API version |
+
+### Meta webhook setup
+
+Point your Meta app's webhook at `https://your-host/webhook/whatsapp`:
+
+- The `GET` verification handshake echoes `hub.challenge` when `hub.verify_token` matches `WHATSAPP_WEBHOOK_VERIFY_TOKEN`.
+- `POST` events are verified against `WHATSAPP_APP_SECRET` via the `x-hub-signature-256` header.
+
+Inbound messages are persisted to the message store, then dispatched in-process to the agent. The thread is looked up by the sender's `waId` and redeliveries are deduped on the thread's last recorded message ID. Any failure returns `500` so Meta redelivers. See [Webhooks](/guides/webhooks) for the full endpoint behavior.
+
+### 24-hour service window
+
+<Warning>
+  Meta only allows free-form messages within 24 hours of the supplier's last inbound message. Outside that window, a free-form text fails with Meta error `131047`, which arrives as a status event after the send is accepted. It never surfaces to the agent as an HTTP error. Use an approved template to reach a supplier outside the window.
+</Warning>
+
+### Channel API
+
+The full WhatsApp channel API (messages, conversations, media, templates, phone number, business profile, setup) is exposed under `/api/*`. Every route requires `Authorization: Bearer <WHATSAPP_API_KEY>` (or `X-API-Key`) and returns `503` when the channel is unconfigured.
+
+```bash
+curl -X POST http://localhost:3001/api/messages \
+  -H "Authorization: Bearer $WHATSAPP_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "to": "14155550123", "type": "text", "text": { "body": "hello" } }'
+```
+
+The response includes `serviceWindowOpen`: `false` when the recipient is outside the 24-hour service window (free-form sends will fail, so use a template) and `null` when the recipient has never messaged in.
 
 For how inbound webhooks resume the supervisor, see [Webhooks](/guides/webhooks). For the full list of environment variables, see [Environment Variables](/configuration/environment).

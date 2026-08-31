@@ -95,7 +95,8 @@
             "group": "Webhooks",
             "pages": [
               "api-reference/webhooks/supplier",
-              "api-reference/webhooks/vapi"
+              "api-reference/webhooks/vapi",
+              "api-reference/webhooks/whatsapp"
             ]
           },
           {
