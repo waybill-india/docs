@@ -1,0 +1,136 @@
+---
+title: "Upload and Retrieve Media"
+sidebarTitle: "Media"
+description: "POST /api/media uploads a file to WhatsApp and returns a media id. GET and DELETE /api/media/:mediaId download or delete uploaded media."
+---
+
+Media messages (image, audio, video, document, and sticker) reference a media id rather than carrying bytes inline. Upload the file first, then use the returned id in the send payload. You can also download media that a contact sent inbound, and delete uploads you no longer need.
+
+## Authentication
+
+Every `/api/*` route requires the API key. Send it as `Authorization: Bearer <WHATSAPP_API_KEY>` or as an `X-API-Key` header. See the [WhatsApp channel overview](/api-reference/whatsapp/overview) for the shared authentication and error behavior.
+
+## Upload media
+
+```http
+POST /api/media
+```
+
+Uploads a file to WhatsApp as `multipart/form-data` and returns the media id. Use that id as the `id` in an image, audio, video, document, or sticker send on [POST /api/messages](/api-reference/whatsapp/send-message).
+
+### Request body
+
+<ParamField body="file" type="file" required>
+  The file to upload, sent as a multipart form field.
+</ParamField>
+
+<ParamField body="type" type="string">
+  MIME type override, for example `image/jpeg`. Use it when the file part carries no MIME type of its own. The upload fails with a `400` when no MIME type can be determined.
+</ParamField>
+
+### Response
+
+<ResponseField name="id" type="string">
+  The media id assigned by WhatsApp. Reference it in media sends and in the download and delete endpoints below.
+</ResponseField>
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST http://localhost:3001/api/media \
+  -H "Authorization: Bearer $WHATSAPP_API_KEY" \
+  -F "file=@./datasheet.pdf;type=application/pdf"
+```
+
+```bash cURL (explicit type field)
+curl -X POST http://localhost:3001/api/media \
+  -H "Authorization: Bearer $WHATSAPP_API_KEY" \
+  -F "file=@./photo.bin" \
+  -F "type=image/jpeg"
+```
+
+</CodeGroup>
+
+```json
+{ "id": "1234567890123456" }
+```
+
+## Download media
+
+```http
+GET /api/media/:mediaId
+```
+
+Streams the media bytes back with the stored content type. This works for your own uploads and for media ids received on inbound messages through the [WhatsApp webhook](/api-reference/webhooks/whatsapp).
+
+### Path parameters
+
+<ParamField path="mediaId" type="string" required>
+  The media id from an upload or from an inbound media message.
+</ParamField>
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl http://localhost:3001/api/media/1234567890123456 \
+  -H "Authorization: Bearer $WHATSAPP_API_KEY" \
+  -o datasheet.pdf
+```
+
+</CodeGroup>
+
+The response body is the raw file. The `Content-Type` header carries the stored MIME type, and `Content-Length` is set when the size is known.
+
+## Delete media
+
+```http
+DELETE /api/media/:mediaId
+```
+
+Deletes uploaded media from WhatsApp. Sent messages that already referenced the id are not affected.
+
+### Path parameters
+
+<ParamField path="mediaId" type="string" required>
+  The media id to delete.
+</ParamField>
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl -X DELETE http://localhost:3001/api/media/1234567890123456 \
+  -H "Authorization: Bearer $WHATSAPP_API_KEY"
+```
+
+</CodeGroup>
+
+```json
+{ "success": true }
+```
+
+## Responses
+
+| Status | Body | Meaning |
+| --- | --- | --- |
+| 201 | `{ "id": "…" }` | Upload accepted (POST). |
+| 200 | (file bytes) | Media streamed back (GET). |
+| 200 | `{ "success": true }` | Media deleted (DELETE). |
+| 400 | `{ "error": { "message": "Send multipart/form-data with a \"file\" field" } }` | The form or the `file` field is missing. |
+| 400 | `{ "error": { "message": "Could not determine MIME type — pass a \"type\" form field" } }` | The file part has no MIME type and no `type` field was given. |
+| 401 | `{ "error": { "message": "Unauthorized — provide the API key via \"Authorization: Bearer <key>\" or \"X-API-Key\"." } }` | Missing or wrong API key. |
+| 413 | `{ "error": { "message": "Payload too large" } }` | The upload exceeds the size limit. |
+| 503 | `{ "error": { "message": "WhatsApp channel is not configured" } }` | The `WHATSAPP_*` environment variables are not set. |
+
+Graph API errors from Meta, such as an unknown media id, pass through with Meta's status code and a `hint` when the error code is known.
+
+## Related
+
+- [Send a Message](/api-reference/whatsapp/send-message)
+- [WhatsApp Channel Overview](/api-reference/whatsapp/overview)
+- [WhatsApp Webhook](/api-reference/webhooks/whatsapp)

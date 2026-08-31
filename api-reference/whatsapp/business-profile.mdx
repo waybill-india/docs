@@ -1,0 +1,109 @@
+---
+title: "Business Profile"
+sidebarTitle: "Business Profile"
+description: "Read and update the WhatsApp business profile with GET and PUT /api/business-profile."
+---
+
+The business profile is what recipients see when they open your contact card in WhatsApp: the about line, address, description, email, industry, and website links. Keep it filled in so suppliers can verify who is messaging them.
+
+## Endpoints
+
+```http
+GET /api/business-profile
+PUT /api/business-profile
+```
+
+## Authentication
+
+Send the API key as `Authorization: Bearer <WHATSAPP_API_KEY>` or in the `X-API-Key` header. Requests without a valid key return `401`. When the WhatsApp environment variables are unset, every route returns `503`. See the [WhatsApp channel overview](/api-reference/whatsapp/overview) for shared authentication and error behavior.
+
+## Get the business profile
+
+`GET /api/business-profile` returns the profile in Meta's shape: a `data` array containing a single profile object.
+
+<ResponseField name="data" type="array">
+  Contains one object with the profile fields: `about`, `address`, `description`, `email`, `profile_picture_url`, `websites`, and `vertical`.
+</ResponseField>
+
+## Update the business profile
+
+`PUT /api/business-profile` updates the profile. Every field is optional. Only the fields you provide change; omitted fields keep their current values.
+
+<ParamField body="about" type="string">
+  Short status line shown on the contact card. Up to 139 characters.
+</ParamField>
+
+<ParamField body="address" type="string">
+  Business street address. Up to 256 characters.
+</ParamField>
+
+<ParamField body="description" type="string">
+  Longer business description. Up to 512 characters.
+</ParamField>
+
+<ParamField body="email" type="string">
+  Contact email address. Up to 128 characters.
+</ParamField>
+
+<ParamField body="vertical" type="string">
+  Business industry category, using one of Meta's vertical values.
+</ParamField>
+
+<ParamField body="websites" type="string[]">
+  Website URLs. Up to 2 entries, each a valid URL.
+</ParamField>
+
+Returns `{ "success": true }`.
+
+## Example
+
+<CodeGroup>
+
+```bash Get the profile
+curl http://localhost:3001/api/business-profile \
+  -H "Authorization: Bearer $WHATSAPP_API_KEY"
+```
+
+```bash Update the profile
+curl -X PUT http://localhost:3001/api/business-profile \
+  -H "Authorization: Bearer $WHATSAPP_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "about": "Automated procurement for electronic components",
+    "email": "sourcing@example.com",
+    "websites": ["https://example.com"]
+  }'
+```
+
+</CodeGroup>
+
+```json GET response
+{
+  "data": [
+    {
+      "about": "Automated procurement for electronic components",
+      "description": "We source electronic parts from verified suppliers.",
+      "email": "sourcing@example.com",
+      "websites": ["https://example.com"],
+      "vertical": "PROF_SERVICES",
+      "messaging_product": "whatsapp"
+    }
+  ]
+}
+```
+
+## Errors
+
+| Status | Body | Meaning |
+| --- | --- | --- |
+| 400 | `{ "error": { "message": "Invalid profile payload", "issues": [ … ] } }` | A field exceeded its length limit or `websites` contained an invalid URL. |
+| 401 | `{ "error": { "message": "Unauthorized — provide the API key via \"Authorization: Bearer <key>\" or \"X-API-Key\"." } }` | Missing or invalid API key. |
+| 503 | `{ "error": { "message": "WhatsApp channel is not configured" } }` | The `WHATSAPP_*` environment variables are unset. |
+
+Graph API failures pass through with Meta's status code and a serialized error body. See the [overview](/api-reference/whatsapp/overview) for the full error envelope.
+
+## Related
+
+- [Phone Number Info and Registration](/api-reference/whatsapp/phone-number)
+- [WhatsApp Channel Overview](/api-reference/whatsapp/overview)
+- [Environment Variables](/configuration/environment)

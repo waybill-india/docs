@@ -1,0 +1,122 @@
+---
+title: "WhatsApp Channel API Overview"
+sidebarTitle: "Overview"
+description: "The authenticated WhatsApp channel API under /api/* exposes the full WhatsApp Cloud API surface: messages, conversations, media, templates, phone number, and business profile."
+---
+
+waybill-arc includes a full WhatsApp Cloud API surface under `/api/*`. Use it to send messages, manage conversations, upload and fetch media, manage message templates, register and inspect the sender phone number, and read or update the business profile. The procurement agent sends its own WhatsApp RFQs through the same send path, so anything you send through this API shares the same message store and delivery-status history.
+
+Use this API when you want to operate the WhatsApp channel directly, outside of a procurement run. Inbound messages and delivery statuses arrive through the [Meta WhatsApp webhook](/api-reference/webhooks/whatsapp) and are persisted to the same store.
+
+## Base URL
+
+Local development runs on `http://localhost:3001`. All request and response bodies are JSON unless noted otherwise.
+
+## Authentication
+
+Every `/api/*` route requires the API key configured in `WHATSAPP_API_KEY`. Send it in either header:
+
+```http
+Authorization: Bearer <WHATSAPP_API_KEY>
+```
+
+```http
+X-API-Key: <WHATSAPP_API_KEY>
+```
+
+A missing or incorrect key returns `401`:
+
+```json
+{
+  "error": {
+    "message": "Unauthorized — provide the API key via \"Authorization: Bearer <key>\" or \"X-API-Key\"."
+  }
+}
+```
+
+## Configuration
+
+The channel is enabled only when all seven WhatsApp environment variables are set together: `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_BUSINESS_ACCOUNT_ID`, `WHATSAPP_APP_SECRET`, `WHATSAPP_WEBHOOK_VERIFY_TOKEN`, `WHATSAPP_API_KEY`, and `WHATSAPP_DATABASE_URL`. While any of them is unset, every `/api/*` route returns `503`:
+
+```json
+{ "error": { "message": "WhatsApp channel is not configured" } }
+```
+
+Two optional variables tune the upstream Graph API: `GRAPH_API_BASE_URL` (default `https://graph.facebook.com`) and `GRAPH_API_VERSION` (default `v26.0`). See [Environment Variables](/configuration/environment) for the full list.
+
+## Error envelope
+
+Every error on `/api/*` uses the same shape:
+
+```json
+{ "error": { "message": "…" } }
+```
+
+| Status | Meaning |
+| --- | --- |
+| 400 | Invalid payload. Validation errors include an `issues` array describing each failed field. Also returned for `Malformed JSON body`. |
+| 401 | Missing or incorrect API key. |
+| 404 | Resource not found, for example an unknown `wamid`. |
+| 409 | Idempotency conflict: a send with the same `Idempotency-Key` is still in flight. |
+| 413 | `Payload too large`. JSON bodies are capped at 1 MB and media uploads at 105 MB. |
+| 503 | WhatsApp channel is not configured. |
+
+### Graph API error passthrough
+
+When Meta's Graph API rejects a request, the error passes through with Meta's HTTP status (clamped to `502` when out of range) and a serialized body:
+
+```json
+{
+  "error": {
+    "message": "Re-engagement message",
+    "status": 400,
+    "code": 131047,
+    "subcode": null,
+    "details": "Message failed to send because more than 24 hours have passed since the customer last replied to this number.",
+    "hint": "Re-engagement required — more than 24 hours since the user last messaged you. Send an approved template message instead of a free-form message.",
+    "fbtraceId": "AbCdEf123"
+  }
+}
+```
+
+`hint` is a human-readable remediation for known Meta error codes. For example, code `131047` means the 24-hour service window has lapsed and you should send an approved template, and code `133010` means the phone number is not registered on the Cloud API yet. `code`, `subcode`, `details`, and `fbtraceId` come straight from Meta and are useful when filing support requests.
+
+## Endpoints
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| POST | `/api/messages` | [Send a message](/api-reference/whatsapp/send-message) of any supported type. |
+| GET | `/api/messages/:wamid` | [Fetch a stored message](/api-reference/whatsapp/messages) with its delivery-status history. |
+| POST | `/api/messages/:wamid/read` | [Mark an inbound message as read](/api-reference/whatsapp/messages), optionally showing a typing indicator. |
+| GET | `/api/conversations` | [List contacts](/api-reference/whatsapp/conversations) with their last message and service-window state. |
+| GET | `/api/conversations/:waId/messages` | [Page through one conversation](/api-reference/whatsapp/conversations), newest first. |
+| POST | `/api/media` | [Upload media](/api-reference/whatsapp/media) for use in sends. |
+| GET | `/api/media/:mediaId` | [Stream media bytes back](/api-reference/whatsapp/media). |
+| DELETE | `/api/media/:mediaId` | [Delete uploaded media](/api-reference/whatsapp/media). |
+| GET | `/api/templates` | [List templates](/api-reference/whatsapp/templates) with review status. |
+| POST | `/api/templates` | [Submit a template](/api-reference/whatsapp/templates) for Meta review. |
+| DELETE | `/api/templates` | [Delete a template](/api-reference/whatsapp/templates) by name. |
+| GET | `/api/phone-number` | [Read sender number info](/api-reference/whatsapp/phone-number) including quality rating. |
+| POST | `/api/phone-number/register` | [Register the number](/api-reference/whatsapp/phone-number) on the Cloud API. |
+| GET | `/api/business-profile` | [Read the business profile](/api-reference/whatsapp/business-profile). |
+| PUT | `/api/business-profile` | [Update business profile fields](/api-reference/whatsapp/business-profile). |
+| POST | `/api/setup/subscribe` | [Subscribe the Meta app](/api-reference/whatsapp/setup) to WABA webhooks. |
+| GET | `/api/setup/subscriptions` | [List subscribed apps](/api-reference/whatsapp/setup). |
+
+## Example
+
+<CodeGroup>
+
+```bash cURL
+curl http://localhost:3001/api/conversations?limit=10 \
+  -H "Authorization: Bearer $WHATSAPP_API_KEY"
+```
+
+</CodeGroup>
+
+## Related
+
+- [Send a Message](/api-reference/whatsapp/send-message)
+- [Meta WhatsApp Webhook](/api-reference/webhooks/whatsapp)
+- [Channels Guide](/guides/channels)
+- [Environment Variables](/configuration/environment)
