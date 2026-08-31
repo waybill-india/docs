@@ -93,6 +93,18 @@ Returned by `POST /webhook/vapi` when `VAPI_WEBHOOK_SECRET` is not configured.
 }
 ```
 
+### WhatsApp channel API errors
+
+Routes under `/api/*` use a nested envelope instead of the flat `error` string.
+
+```json
+{
+  "error": { "message": "Unauthorized — provide the API key via \"Authorization: Bearer <key>\" or \"X-API-Key\"." }
+}
+```
+
+Validation failures (400) include an `issues` array of Zod issues alongside the message. Graph API errors pass through Meta's status code and add `code`, `subcode`, and a `hint` field with remediation advice for known Meta error codes. See [WhatsApp channel API overview](/api-reference/whatsapp/overview) for the full error model.
+
 ## Common error scenarios
 
 | Endpoint | Status | Meaning |
@@ -111,5 +123,9 @@ Returned by `POST /webhook/vapi` when `VAPI_WEBHOOK_SECRET` is not configured.
 | `GET /supervisor/:requestID` | 404 | `requestID` does not exist |
 | `POST /webhook/vapi` | 401 | Invalid `x-waybill-signature` |
 | `POST /webhook/vapi` | 503 | Vapi webhook secret is not configured |
+| `POST /webhook/whatsapp` | 401 | Invalid `x-hub-signature-256` |
+| `POST /webhook/whatsapp` | 503 | WhatsApp channel is not configured |
+| `POST /api/messages` | 401 | Missing or bad API key |
+| `POST /api/messages` | 409 | `Idempotency-Key` still in flight |
 
 For details on how requests move through stages and when these errors can occur, see [Request lifecycle](/concepts/request-lifecycle).

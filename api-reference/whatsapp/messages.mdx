@@ -1,0 +1,123 @@
+---
+title: "Message Status and Read Receipts"
+sidebarTitle: "Messages"
+description: "GET /api/messages/:wamid returns a stored message with its delivery-status history. POST /api/messages/:wamid/read marks an inbound message as read."
+---
+
+Every message the WhatsApp channel sends or receives is persisted with its Meta message ID (`wamid`). Use these endpoints to check delivery after a send and to send read receipts for inbound messages. Meta accepting a send does not mean it was delivered. Delivery and failure arrive later as status events on the [WhatsApp webhook](/api-reference/webhooks/whatsapp), and the service records them against the stored message.
+
+## Authentication
+
+Every `/api/*` route requires the API key. Send it as `Authorization: Bearer <WHATSAPP_API_KEY>` or as an `X-API-Key` header. See the [WhatsApp channel overview](/api-reference/whatsapp/overview) for the shared authentication and error behavior.
+
+## Get a message and its status history
+
+```http
+GET /api/messages/:wamid
+```
+
+Returns the stored message record plus every status event recorded for it, oldest first. Call this after [sending a message](/api-reference/whatsapp/send-message) to check whether it was delivered, read, or failed.
+
+### Path parameters
+
+<ParamField path="wamid" type="string" required>
+  The Meta message ID returned by a send, or the `wamid` of an inbound message.
+</ParamField>
+
+### Response
+
+<ResponseField name="message" type="object">
+  The stored message record: `wamid`, `direction` (`inbound` or `outbound`), `waId`, `type`, `payload`, `status`, `statusTimestamp`, `errors`, `timestamp`, and `createdAt`. Timestamps are unix seconds.
+</ResponseField>
+
+<ResponseField name="statusHistory" type="array">
+  Status events recorded from the webhook, oldest first. Each entry has `status` (for example `sent`, `delivered`, `read`, `failed`), `timestamp`, and `raw` (the original status event from Meta).
+</ResponseField>
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl http://localhost:3001/api/messages/wamid.HBgLMTU1NTEyMzQ1NjcVAgARGBI5QTNDQTVCM0Q0Q0Q2RTY3RTcA \
+  -H "Authorization: Bearer $WHATSAPP_API_KEY"
+```
+
+</CodeGroup>
+
+```json
+{
+  "message": {
+    "wamid": "wamid.HBgLMTU1NTEyMzQ1NjcVAgARGBI5QTNDQTVCM0Q0Q0Q2RTY3RTcA",
+    "direction": "outbound",
+    "waId": "15551234567",
+    "type": "text",
+    "payload": { "body": "Your RFQ has been sent to 5 suppliers." },
+    "status": "delivered",
+    "statusTimestamp": 1730000120,
+    "errors": null,
+    "timestamp": 1730000115,
+    "createdAt": 1730000115
+  },
+  "statusHistory": [
+    { "status": "sent", "timestamp": 1730000116, "raw": { "…": "…" } },
+    { "status": "delivered", "timestamp": 1730000120, "raw": { "…": "…" } }
+  ]
+}
+```
+
+## Mark a message as read
+
+```http
+POST /api/messages/:wamid/read
+```
+
+Marks an inbound message as read via Meta, which shows the blue check marks to the sender. Optionally show a typing indicator at the same time. The body is optional JSON.
+
+### Path parameters
+
+<ParamField path="wamid" type="string" required>
+  The `wamid` of the inbound message to mark as read.
+</ParamField>
+
+### Request body
+
+<ParamField body="typing" type="boolean">
+  When `true`, also shows a typing indicator to the sender. Defaults to `false`.
+</ParamField>
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST http://localhost:3001/api/messages/wamid.HBgLMTU1NTEyMzQ1NjcVAgASGBQzQUJDRDEyMzQ1Njc4OTBBQkNEAA/read \
+  -H "Authorization: Bearer $WHATSAPP_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "typing": true }'
+```
+
+</CodeGroup>
+
+```json
+{ "success": true }
+```
+
+## Responses
+
+| Status | Body | Meaning |
+| --- | --- | --- |
+| 200 | `{ "message": …, "statusHistory": [ … ] }` | Message found (GET). |
+| 200 | `{ "success": true }` | Read receipt sent (POST). |
+| 400 | `{ "error": { "message": "Invalid payload", "issues": [ … ] } }` | The read-receipt body failed validation. |
+| 401 | `{ "error": { "message": "Unauthorized — provide the API key via \"Authorization: Bearer <key>\" or \"X-API-Key\"." } }` | Missing or wrong API key. |
+| 404 | `{ "error": { "message": "Message not found" } }` | No stored message with that `wamid`. |
+| 503 | `{ "error": { "message": "WhatsApp channel is not configured" } }` | The `WHATSAPP_*` environment variables are not set. |
+
+Graph API errors from Meta pass through with Meta's status code and a `hint` when the error code is known. See [error handling](/api-reference/whatsapp/overview) for the full envelope.
+
+## Related
+
+- [Send a Message](/api-reference/whatsapp/send-message)
+- [Conversations](/api-reference/whatsapp/conversations)
+- [WhatsApp Webhook](/api-reference/webhooks/whatsapp)

@@ -1,0 +1,113 @@
+---
+title: "WhatsApp Meta Webhook"
+sidebarTitle: "WhatsApp Webhook"
+description: "GET /webhook/whatsapp handles Meta's verification handshake and POST /webhook/whatsapp receives signed inbound messages and delivery statuses from the WhatsApp Cloud API."
+---
+
+Meta calls `/webhook/whatsapp`, not you. Point your Meta app's webhook URL at this endpoint when you set up the WhatsApp channel. A UI does not need it.
+
+`GET` handles Meta's one-time verification handshake. `POST` receives inbound messages and delivery statuses, authenticated by the `x-hub-signature-256` header. Inbound text messages resume the supervisor run for the matching request and supplier.
+
+## Endpoint
+
+```http
+GET /webhook/whatsapp
+POST /webhook/whatsapp
+```
+
+## Verification handshake (GET)
+
+Meta sends a `GET` request when you register or update the webhook URL in your app settings. The endpoint echoes `hub.challenge` back as `text/plain` with status 200 when all of the following hold:
+
+- `hub.mode` is `subscribe`
+- `hub.verify_token` matches `WHATSAPP_WEBHOOK_VERIFY_TOKEN`
+- `hub.challenge` is present
+
+Otherwise it returns `403 Forbidden`.
+
+<ParamField query="hub.mode" type="string" required>
+  Must be `subscribe`.
+</ParamField>
+
+<ParamField query="hub.verify_token" type="string" required>
+  Must match the `WHATSAPP_WEBHOOK_VERIFY_TOKEN` environment variable.
+</ParamField>
+
+<ParamField query="hub.challenge" type="string" required>
+  Echoed back verbatim on success.
+</ParamField>
+
+## Event delivery (POST)
+
+Meta posts inbound messages and delivery statuses to this endpoint. Requests are authenticated by the `x-hub-signature-256` header: an HMAC-SHA256 hex digest of the raw request body keyed by `WHATSAPP_APP_SECRET`, prefixed with `sha256=`. Requests with a missing or invalid signature are rejected with 401.
+
+Every event is persisted to the WhatsApp message store. Inbound text messages are then matched to a request/supplier pair through channel threads on the sender's WhatsApp ID. When several requests share the same sender, the most recently created request wins. A match resumes the supervisor run with the supplier's reply.
+
+Non-text messages, delivery statuses, messages from unmapped senders, and redeliveries of an already-recorded message are accepted with 200 and deliberately ignored.
+
+## Redelivery semantics
+
+Meta delivers events at-least-once and retries failed deliveries with backoff. The handler is idempotent per message: dedupe on the thread's last recorded message ID keeps a redelivered message from resuming the run twice. A 500 response tells Meta to redeliver, so transient persistence or dispatch failures heal on retry.
+
+## Example
+
+Meta's verification handshake:
+
+<CodeGroup>
+
+```bash cURL
+curl "http://localhost:3001/webhook/whatsapp?hub.mode=subscribe&hub.verify_token=your-verify-token&hub.challenge=1158201444"
+```
+
+</CodeGroup>
+
+A minimal inbound text event as Meta posts it:
+
+```json Meta event payload
+{
+  "object": "whatsapp_business_account",
+  "entry": [
+    {
+      "id": "102290129340398",
+      "changes": [
+        {
+          "field": "messages",
+          "value": {
+            "messages": [
+              {
+                "id": "wamid.HBgLMTU1NTEyMzQ1NjcVAgARGBI5QTNDQTVCM0Q0Q0Q2RTY3RTcA",
+                "from": "15551234567",
+                "timestamp": "1718000000",
+                "type": "text",
+                "text": { "body": "We can quote 500 units at $1.20 each." }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
+```
+
+## Responses
+
+| Status | Body | Meaning |
+| --- | --- | --- |
+| 200 | `OK` | Event processed, including deliberately ignored events: statuses, non-text messages, unmapped senders, and redeliveries. |
+| 400 | `Malformed JSON` | The request body was not valid JSON. |
+| 401 | `Invalid signature` | The `x-hub-signature-256` header was missing or did not match. |
+| 500 | `Processing failed` | Persistence or agent dispatch failed. Meta redelivers with backoff, and message-ID dedupe prevents double-resuming the run. |
+| 503 | `{ "error": "WhatsApp channel is not configured" }` | The `WHATSAPP_*` environment variables are unset. |
+
+The 400, 401, and 500 bodies are plain text, not JSON.
+
+## Failure behavior
+
+Outbound send failures that happen after Meta accepts a message arrive as status events on this webhook rather than as HTTP errors on the send call. The most common case is a free-form text sent outside the 24-hour service window, Meta error 131047. These failures are recorded on the message in the store and never surface to the agent. See [Send a message](/api-reference/whatsapp/send-message) for how to recover with a template.
+
+## Related
+
+- [Webhooks Guide](/guides/webhooks)
+- [Channels Guide](/guides/channels)
+- [WhatsApp Channel API Overview](/api-reference/whatsapp/overview)
