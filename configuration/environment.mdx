@@ -54,6 +54,23 @@ waybill-arc reads its configuration from a `.env` file in the repo root, validat
 | `VAPI_WEBHOOK_SECRET` | — | Shared secret sent back as `x-waybill-signature` |
 | `VAPI_SMS_PHONE_NUMBER_ID` | — | SMS-enabled US Twilio number imported into Vapi |
 
+## WhatsApp channel (Meta Cloud API)
+
+Configuration is all-or-nothing: set none of the variables to disable the channel, or set all seven required ones.
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `WHATSAPP_ACCESS_TOKEN` | — | Meta System User token for the Cloud API |
+| `WHATSAPP_PHONE_NUMBER_ID` | — | Numeric phone number ID (not the phone number) |
+| `WHATSAPP_BUSINESS_ACCOUNT_ID` | — | The WhatsApp Business Account (WABA) ID |
+| `WHATSAPP_APP_SECRET` | — | Verifies `x-hub-signature-256` on `POST /webhook/whatsapp` |
+| `WHATSAPP_WEBHOOK_VERIFY_TOKEN` | — | Echoed in the Meta webhook GET handshake |
+| `WHATSAPP_API_KEY` | — | Bearer key protecting the `/api/*` channel endpoints |
+| `WHATSAPP_DATABASE_URL` | — | Postgres connection string for the `whatsapp` schema (message store) |
+| `WHATSAPP_DIRECT_URL` | — | Optional non-pooled URL used by `prisma migrate` |
+| `GRAPH_API_BASE_URL` | `https://graph.facebook.com` | Graph API host |
+| `GRAPH_API_VERSION` | `v26.0` | Graph API version |
+
 ## Example `.env`
 
 ```sh
@@ -86,6 +103,18 @@ VAPI_PHONE_NUMBER_ID=phone_...
 VAPI_WEBHOOK_URL=https://your-host/webhook/vapi
 VAPI_WEBHOOK_SECRET=shared-secret
 VAPI_SMS_PHONE_NUMBER_ID=phone_sms_...
+
+# WhatsApp channel (optional, all-or-nothing)
+WHATSAPP_ACCESS_TOKEN=EAAG...
+WHATSAPP_PHONE_NUMBER_ID=123456789012345
+WHATSAPP_BUSINESS_ACCOUNT_ID=987654321098765
+WHATSAPP_APP_SECRET=app-secret
+WHATSAPP_WEBHOOK_VERIFY_TOKEN=use-a-long-random-string
+WHATSAPP_API_KEY=use-a-long-random-string
+WHATSAPP_DATABASE_URL=postgresql://user:pass@host:5432/dbname
+# WHATSAPP_DIRECT_URL=postgresql://user:pass@host:5432/dbname
+# GRAPH_API_BASE_URL=https://graph.facebook.com
+# GRAPH_API_VERSION=v26.0
 ```
 
 See also:

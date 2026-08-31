@@ -4,7 +4,7 @@ sidebarTitle: "Database"
 description: "Set up Postgres for waybill-arc LangGraph checkpoints, channel tables, and web search runs. Run migrations with npm."
 ---
 
-waybill-arc uses Postgres for LangGraph checkpoints (agent memory), the channel tables (`supplier_contacts`, `channel_threads`), and the `web_search_runs` table. This page covers installing Postgres, creating a database, and running the migration script.
+waybill-arc uses Postgres for LangGraph checkpoints (agent memory), the channel tables (`supplier_contacts`, `channel_threads`), and the `web_search_runs` table. The WhatsApp channel additionally keeps its message store in a separate `whatsapp` schema with its own migrations. This page covers installing Postgres, creating a database, and running the migration scripts.
 
 <Steps>
   <Step title="Install Postgres and create a database">
@@ -34,6 +34,22 @@ The migration script sets up the following tables:
 - **`supplier_contacts`** — stores supplier addresses per channel (`supplier_id`, `channel`, `address`)
 - **`channel_threads`** — maps `(request_id, supplier_id, channel)` to the provider thread ID so replies stay in-thread and inbound webhooks can recover request context
 - **`web_search_runs`** — persists Exa web search run state and results
+
+## WhatsApp message store
+
+The WhatsApp channel keeps its message store in a separate Prisma-managed `whatsapp` Postgres schema, connected through `WHATSAPP_DATABASE_URL` (with an optional non-pooled `WHATSAPP_DIRECT_URL` for migrations). It holds the channel's contacts, messages, delivery-status history, outbox events, and idempotency keys.
+
+`npm run migrate` does not touch this schema. If the WhatsApp channel is configured, apply its Prisma migrations separately:
+
+```sh
+# Development
+npm run db:migrate
+
+# Production
+npm run db:deploy
+```
+
+See [Channels](/guides/channels) for the full WhatsApp channel setup.
 
 <Note>
   Vercel Postgres or any Postgres 14\+ instance works. The migration script is idempotent and safe to re-run.
