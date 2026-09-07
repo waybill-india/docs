@@ -41,8 +41,10 @@ waybill-arc exposes a stateful, poll-based API that you can drive from any front
     ```
 
     - If `supervisor` is non-null, the supervisor has sent RFQs and is `awaiting_supplier_responses`.
-    - If `webSearch` is present, start polling `GET /search/:requestID/web` for open-web supplier candidates.
-    - If `supervisor` is `null`, no internal suppliers matched and the web search is the only leg in flight.
+    - If `webSearchStarted` is `true`, an Exa web search is running. Poll `GET /search/:requestID/web` for open-web supplier candidates, independent of the supervisor run.
+    - If `marketplaceSearched` is `true`, marketplace listings are already stored. Fetch `GET /search/:requestID/marketplaces` once. No polling is needed.
+    - If `distributorsSearched` is `true`, distributor offers are already stored. Fetch `GET /search/:requestID/distributors` once. No polling is needed.
+    - If `supervisor` is `null`, no internal suppliers matched and the open-web legs are the only ones in flight.
   </Step>
   <Step title="Poll the supervisor">
     Poll `GET /supervisor/:requestID` every 5–10 seconds until `status` is `completed`.
@@ -73,7 +75,7 @@ Map the flow above to these UI views:
 - **New request** — a textarea that calls `POST /intake`.
 - **Clarification chat** — a Q&A loop while `awaiting_answer`; options as chips plus a free-text input.
 - **Review spec** — render `resolvedQuery` (part name, specs table, quantity, sources) with a "Find suppliers" button.
-- **Supplier discovery** — show `request.selections` with the reasoning for each contacted supplier.
+- **Supplier discovery** — show `request.selections` with the reasoning for each contacted supplier, plus any open-web results: Exa web candidates, marketplace listings, and distributor offers.
 - **Run progress** — poll `GET /supervisor/:requestID`; display `waitingFor` badges, the `quotes` comparison, and the `messages` timeline.
 - **Result** — the final `negotiation` message as the recommendation, with the timeline available for review.
 

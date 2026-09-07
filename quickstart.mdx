@@ -89,7 +89,7 @@ Before you begin, make sure you have the following ready:
     curl -X POST http://localhost:3001/search/299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21
     ```
 
-    The response includes `selections`, `supervisor` status, and optionally a `webSearch` run.
+    The response includes `selections`, `supervisor` status, and the open-web flags `webSearchStarted`, `marketplaceSearched`, and `distributorsSearched`.
   </Step>
   <Step title="Poll until completed">
     Poll the supervisor endpoint every 5 to 10 seconds until `status` is `completed`:
