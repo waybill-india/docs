@@ -1,0 +1,44 @@
+---
+title: "Stop a Login Session (DELETE /browser/session/:sessionId)"
+sidebarTitle: "Stop Session"
+description: "DELETE /browser/session/:sessionId stops the remote login browser without capturing any cookies."
+---
+
+Stop a login session and its remote browser without capturing anything. Use this when the user cancels the connect flow or the login is abandoned, so the remote browser does not run until the 30-minute TTL expires.
+
+All `/browser/*` routes require `BROWSER_API_KEY` via `Authorization: Bearer` or `X-API-Key`. See [authentication](/api-reference/browser/overview#authentication).
+
+## Request
+
+`DELETE /browser/session/:sessionId`
+
+<ParamField path="sessionId" type="string" required>
+  UUID returned by [`POST /browser/session`](/api-reference/browser/session-start).
+</ParamField>
+
+```bash
+curl -X DELETE http://localhost:3001/browser/session/5f0c2f8e-9f0a-4a6b-8f0e-2b1c3d4e5f60 \
+  -H "Authorization: Bearer $BROWSER_API_KEY"
+```
+
+## Response
+
+### 200 — Session stopped
+
+```json
+{ "ok": true }
+```
+
+## Errors
+
+| Status | Body | Meaning |
+| --- | --- | --- |
+| 400 | `{ "error": "sessionId must be a UUID" }` | Malformed session ID. |
+| 401 | `{ "error": "Unauthorized" }` | Missing or wrong `BROWSER_API_KEY`. |
+| 404 | `{ "error": "Unknown session." }` | The session does not exist or passed its 30-minute TTL. |
+| 503 | `{ "error": "…is not configured" }` | `BROWSER_USE_API_KEY` or `BROWSER_API_KEY` is unset. |
+
+## Related
+
+- [Start a login session](/api-reference/browser/session-start)
+- [Browser login capture overview](/api-reference/browser/overview)

@@ -35,6 +35,15 @@ waybill-arc reads its configuration from a `.env` file in the repo root, validat
 | --- | --- |
 | `EXA_API_KEY` | Enables the parallel Exa web-search leg of `POST /search` |
 
+## Browser login capture (Browser Use)
+
+| Variable | Description |
+| --- | --- |
+| `BROWSER_USE_API_KEY` | Browser Use Cloud API key that backs the remote browsers and profiles |
+| `BROWSER_API_KEY` | Caller key required on every `/browser/*` request via `Authorization: Bearer` or `X-API-Key`; use a long random string |
+
+The `/browser/*` routes return `503` while either variable is unset, and `401` when the caller key is missing or wrong. See [Browser login capture](/api-reference/browser/overview).
+
 ## Email channel (AgentMail)
 
 | Variable | Default | Description |
@@ -73,6 +82,10 @@ LANGFUSE_BASE_URL=https://us.cloud.langfuse.com
 
 # Web search (optional)
 EXA_API_KEY=exa-...
+
+# Browser login capture (optional)
+BROWSER_USE_API_KEY=bu-...
+BROWSER_API_KEY=use-a-long-random-string
 
 # Email channel (optional)
 AGENTMAIL_API_KEY=am-...
