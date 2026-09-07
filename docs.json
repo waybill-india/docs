@@ -81,7 +81,9 @@
             "group": "Search",
             "pages": [
               "api-reference/search/start",
-              "api-reference/search/web"
+              "api-reference/search/web",
+              "api-reference/search/marketplaces",
+              "api-reference/search/distributors"
             ]
           },
           {

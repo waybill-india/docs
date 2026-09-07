@@ -1,0 +1,96 @@
+---
+title: "Get Distributor Offers"
+sidebarTitle: "Distributor Offers"
+description: "GET /search/:requestID/distributors returns live offers from the DigiKey and Mouser catalog APIs with price breaks, stock, and lifecycle status."
+---
+
+Fetch live offers from the DigiKey and Mouser catalog APIs retrieved during [`POST /search/:requestID`](/api-reference/search/start). DigiKey requires `DIGIKEY_CLIENT_ID` and `DIGIKEY_CLIENT_SECRET` together; Mouser requires `MOUSER_API_KEY`. Both legs run only when `SUPPLIER_SIMULATOR=false`.
+
+**Do not poll this endpoint.** The distributor search completes before the `POST /search/:requestID` response is sent, so a single fetch afterwards returns the final result. The response contains at most 5 offers per distributor.
+
+## Endpoint
+
+```http
+GET /search/:requestID/distributors
+```
+
+## Request
+
+<CodeGroup>
+
+```bash cURL
+curl http://localhost:3001/search/299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21/distributors
+```
+
+</CodeGroup>
+
+## Response
+
+### 200 — Distributor offers
+
+```json
+{
+  "requestID": "299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21",
+  "status": "completed",
+  "parts": [
+    {
+      "source": "digikey",
+      "distributorPartNumber": "497-6063-ND",
+      "mpn": "STM32F103C8T6",
+      "manufacturer": "STMicroelectronics",
+      "name": "IC MCU 32BIT 64KB FLASH 48LQFP",
+      "description": "ARM® Cortex®-M3 STM32F1 Microcontroller IC 32-Bit Single-Core 72MHz 64KB (64K x 8) FLASH 48-LQFP (7x7)",
+      "productUrl": "https://www.digikey.com/en/products/detail/stmicroelectronics/STM32F103C8T6/1646338",
+      "datasheetUrl": "https://www.st.com/…/stm32f103c8.pdf",
+      "image": "https://mm.digikey.com/…",
+      "stockQty": 8540,
+      "currency": "INR",
+      "unitPrice": 245.3,
+      "priceBreaks": [
+        { "qty": 1, "unitPrice": 245.3 },
+        { "qty": 10, "unitPrice": 228.71 }
+      ],
+      "minQty": 1,
+      "status": "Active"
+    }
+  ],
+  "errors": [
+    {
+      "distributor": "mouser",
+      "error": "mouser /api/v1/search/keyword responded 429: …"
+    }
+  ]
+}
+```
+
+<ResponseField name="status" type="string">
+  `completed` when at least one configured distributor returned offers. `failed` only when every configured distributor errored.
+</ResponseField>
+
+<ResponseField name="parts" type="array">
+  Up to 5 offers per distributor. Each part carries the distributor part number, MPN, manufacturer, stock, pricing, and lifecycle `status`.
+</ResponseField>
+
+<ResponseField name="priceBreaks" type="array">
+  Quantity price breaks sorted by quantity. `unitPrice` is the price at the request's resolved quantity: the largest break at or below it, falling back to the base quantity-1 price when the quantity is below every break or absent.
+</ResponseField>
+
+<ResponseField name="errors" type="array">
+  Distributors that could not be reached. Only configured distributors are queried, so an unconfigured one never appears in `errors`.
+</ResponseField>
+
+Prices are in major units of `currency`, taken from the distributor's response locale. Mouser product links point at mouser.in, but the Mouser API has no India host or currency option, so Mouser prices stay in the key's account currency.
+
+Like the marketplace listings, these offers are **not** part of the supervisor or RFQ flow. They are an independent outreach list.
+
+## Errors
+
+| Status | Body | Meaning |
+| --- | --- | --- |
+| 404 | `{ "error": "No distributor search for this request" }` | No distributor search ran for this request. Check that `distributorsSearched` was `true` in the [`POST /search/:requestID`](/api-reference/search/start) response. |
+
+## Related
+
+- [Start Supplier Search](/api-reference/search/start)
+- [Get Marketplace Listings](/api-reference/search/marketplaces)
+- [Search Concepts](/concepts/search)

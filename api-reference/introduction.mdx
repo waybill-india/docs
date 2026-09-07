@@ -36,6 +36,8 @@ Show loading states and poll `GET /supervisor/:requestID` every 5–10 seconds a
 | GET | `/intake/:requestID` | Current intake state |
 | POST | `/search/:requestID` | Select suppliers, send RFQs, and start web search |
 | GET | `/search/:requestID/web` | Poll web supplier candidates |
+| GET | `/search/:requestID/marketplaces` | Marketplace product listings |
+| GET | `/search/:requestID/distributors` | Distributor (DigiKey/Mouser) offers |
 | GET | `/supervisor/:requestID` | Poll procurement run state |
 | POST | `/supervisor` | Internal: start a run with an explicit payload |
 | POST | `/webhook` | Internal: supplier gateway resume hook |

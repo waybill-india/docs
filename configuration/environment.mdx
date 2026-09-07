@@ -1,7 +1,7 @@
 ---
 title: "Environment Variables and App Configuration"
 sidebarTitle: "Environment"
-description: "Configure waybill-arc with environment variables for LLMs, Postgres, channels, and optional tracing and web search."
+description: "Configure waybill-arc with environment variables for LLMs, Postgres, channels, sourcing mode, open-web discovery, and optional tracing."
 ---
 
 waybill-arc reads its configuration from a `.env` file in the repo root, validated by `src/config.ts`. Set the required keys for LLM calls and database connectivity, then add optional variables to tune agent behavior, enable channels, or wire observability.
@@ -12,7 +12,13 @@ waybill-arc reads its configuration from a `.env` file in the repo root, validat
 | --- | --- |
 | `OPENAI_API_KEY` | OpenAI key for LLM calls |
 | `DATABASE_URL` | Postgres connection string for LangGraph checkpoints and channel tables |
-| `SUPPLIER_API_URL` | Base URL for the supplier simulator exposing `GET /api/getAllSuppliers` |
+
+## Sourcing mode
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `SUPPLIER_SIMULATOR` | `true` | `true` sources from the supplier simulator (RFQs, negotiation). `false` sources from the open web only, enabling the parallel Exa, marketplace, and distributor legs of `POST /search`. |
+| `SUPPLIER_API_URL` | `http://localhost:3002` | Base URL for the supplier simulator exposing `GET /api/getAllSuppliers`. Unused when `SUPPLIER_SIMULATOR=false`. |
 
 ## Agent tuning
 
@@ -29,11 +35,17 @@ waybill-arc reads its configuration from a `.env` file in the repo root, validat
 | `LANGFUSE_SECRET_KEY` | Langfuse secret key; tracing disabled when unset |
 | `LANGFUSE_BASE_URL` | Langfuse host, e.g. `https://us.cloud.langfuse.com` |
 
-## Web search (Exa)
+## Open-web discovery
+
+Each key enables one open-web leg of `POST /search`. All legs require `SUPPLIER_SIMULATOR=false`.
 
 | Variable | Description |
 | --- | --- |
 | `EXA_API_KEY` | Enables the parallel Exa web-search leg of `POST /search` |
+| `PARSEBOT_API_KEY` | Enables the parallel marketplace-search leg (Amazon, Flipkart, IndiaMART, Alibaba listings via parse.bot; a `pmx_…` key from the parse.bot dashboard) |
+| `DIGIKEY_CLIENT_ID` | DigiKey OAuth client ID; enables the DigiKey distributor-search leg (set with the secret) |
+| `DIGIKEY_CLIENT_SECRET` | DigiKey OAuth client secret; both DigiKey keys must be set together |
+| `MOUSER_API_KEY` | Mouser Search API key; enables the Mouser distributor-search leg (shared quota of about 30 calls/min and 1,000/day) |
 
 ## Email channel (AgentMail)
 
@@ -60,7 +72,12 @@ waybill-arc reads its configuration from a `.env` file in the repo root, validat
 # Required
 OPENAI_API_KEY=sk-...
 DATABASE_URL=postgres://user:pass@host:5432/dbname
-SUPPLIER_API_URL=https://your-supplier-sim.example.com
+
+# Sourcing mode
+# true: source from the supplier simulator (RFQs, negotiation).
+# false: source from the open web only; SUPPLIER_API_URL is unused.
+SUPPLIER_SIMULATOR=true
+SUPPLIER_API_URL=http://localhost:3002
 
 # Agent tuning
 CONFIDENCE_THRESHOLD=0.9
@@ -71,8 +88,12 @@ LANGFUSE_PUBLIC_KEY=pk-...
 LANGFUSE_SECRET_KEY=sk-...
 LANGFUSE_BASE_URL=https://us.cloud.langfuse.com
 
-# Web search (optional)
+# Open-web discovery (optional; requires SUPPLIER_SIMULATOR=false)
 EXA_API_KEY=exa-...
+PARSEBOT_API_KEY=pmx_...
+DIGIKEY_CLIENT_ID=...
+DIGIKEY_CLIENT_SECRET=...
+MOUSER_API_KEY=...
 
 # Email channel (optional)
 AGENTMAIL_API_KEY=am-...
