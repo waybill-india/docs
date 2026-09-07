@@ -1,0 +1,100 @@
+---
+title: "Start a Login Session (POST /browser/session)"
+sidebarTitle: "Start Session"
+description: "POST /browser/session starts a remote login-capture browser and a named Browser Use profile, returning a liveUrl to embed for the human login."
+---
+
+Start a login-capture session. The route creates a named profile plus an ephemeral remote browser, optionally navigates it to a login page, and returns a `liveUrl` for the human to log in through. The browser is not bound to the profile: cookies land in the profile only after [`POST /browser/cookies`](/api-reference/browser/cookies).
+
+All `/browser/*` routes require `BROWSER_API_KEY` via `Authorization: Bearer` or `X-API-Key`. See [authentication](/api-reference/browser/overview#authentication).
+
+## Request
+
+`POST /browser/session`
+
+<ParamField body="startUrl" type="string">
+  URL to navigate the browser to after it boots, typically the site's login page. Bare hosts get `https://` prepended. Invalid URLs return `400`.
+</ParamField>
+
+<ParamField body="userId" type="string">
+  Tenant identifier for the connector flow. Must be provided together with `site`. Must not contain `:`, `/`, or whitespace.
+</ParamField>
+
+<ParamField body="site" type="string">
+  Site identifier for the connector flow, for example `amazon`. Must be provided together with `userId`. Must not contain `:`, `/`, or whitespace.
+</ParamField>
+
+<ParamField body="profileName" type="string">
+  Name for a standalone profile. Ignored in the connector flow. When omitted, a unique name is generated.
+</ParamField>
+
+With `userId` and `site`, the route reuses or creates the `browser_profiles` registry entry for that tenant with status `pending`. A successful cookie capture later marks it `connected` so agent runs can resolve the profile by `userId` and `site`. Without them, the profile is standalone.
+
+<CodeGroup>
+
+```bash Connector flow
+curl -X POST http://localhost:3001/browser/session \
+  -H "Authorization: Bearer $BROWSER_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"userId": "client-42", "site": "amazon", "startUrl": "amazon.in"}'
+```
+
+```bash Standalone profile
+curl -X POST http://localhost:3001/browser/session \
+  -H "Authorization: Bearer $BROWSER_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"profileName": "amazon-in-shared", "startUrl": "https://www.amazon.in"}'
+```
+
+</CodeGroup>
+
+## Response
+
+### 200 — Session started
+
+```json
+{
+  "sessionId": "5f0c2f8e-9f0a-4a6b-8f0e-2b1c3d4e5f60",
+  "liveUrl": "https://live.browser-use.com/…",
+  "profileId": "prof_…",
+  "profileName": "client-42/amazon",
+  "startUrlNavigated": true
+}
+```
+
+<ResponseField name="sessionId" type="string">
+  UUID for this login session. Pass it to the navigate, cookies, and delete routes. Expires after 30 minutes.
+</ResponseField>
+
+<ResponseField name="liveUrl" type="string">
+  Interactive live view of the remote browser. Embed it in an iframe or open it in a tab and let the user log in. Treat it as a credential: it grants control of the browser, so never log it.
+</ResponseField>
+
+<ResponseField name="profileId" type="string">
+  Browser Use profile the captured cookies will be stored in.
+</ResponseField>
+
+<ResponseField name="profileName" type="string">
+  Resolved profile name. `userId/site` in the connector flow.
+</ResponseField>
+
+<ResponseField name="startUrlNavigated" type="boolean">
+  Whether the browser was navigated to `startUrl`. `false` when no `startUrl` was sent.
+</ResponseField>
+
+Browser boot takes a few seconds. The route waits for readiness before responding.
+
+## Errors
+
+| Status | Body | Meaning |
+| --- | --- | --- |
+| 400 | `{ "errors": [ …zod issues… ] }` | Validation failed, for example `userId` without `site`. |
+| 400 | `{ "error": "Invalid startUrl: …" }` | `startUrl` is not a valid http or https URL. |
+| 401 | `{ "error": "Unauthorized" }` | Missing or wrong `BROWSER_API_KEY`. |
+| 503 | `{ "error": "…is not configured" }` | `BROWSER_USE_API_KEY` or `BROWSER_API_KEY` is unset. |
+
+## Next steps
+
+- Show the user `liveUrl` and wait for them to finish logging in.
+- Capture the session with [POST /browser/cookies](/api-reference/browser/cookies).
+- Abandon without capturing via [DELETE /browser/session/:sessionId](/api-reference/browser/session-delete).

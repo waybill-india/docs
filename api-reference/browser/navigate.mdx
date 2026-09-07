@@ -1,0 +1,55 @@
+---
+title: "Navigate the Login Browser (POST /browser/navigate)"
+sidebarTitle: "Navigate"
+description: "POST /browser/navigate drives the remote login browser to a URL, since the embedded live view has no address bar."
+---
+
+Drive the login browser of an active session to a URL. The live view has no address bar, so use this route when the user needs to reach a different page, for example a second login step hosted on another domain.
+
+All `/browser/*` routes require `BROWSER_API_KEY` via `Authorization: Bearer` or `X-API-Key`. See [authentication](/api-reference/browser/overview#authentication).
+
+## Request
+
+`POST /browser/navigate`
+
+<ParamField body="sessionId" type="string" required>
+  UUID returned by [`POST /browser/session`](/api-reference/browser/session-start).
+</ParamField>
+
+<ParamField body="url" type="string" required>
+  Destination URL. Bare hosts get `https://` prepended. Invalid URLs return `400`.
+</ParamField>
+
+```bash
+curl -X POST http://localhost:3001/browser/navigate \
+  -H "Authorization: Bearer $BROWSER_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"sessionId": "5f0c2f8e-9f0a-4a6b-8f0e-2b1c3d4e5f60", "url": "accounts.example.com/login"}'
+```
+
+## Response
+
+### 200 — Navigated
+
+```json
+{ "ok": true, "url": "https://accounts.example.com/login" }
+```
+
+<ResponseField name="url" type="string">
+  The normalized URL the browser was driven to.
+</ResponseField>
+
+## Errors
+
+| Status | Body | Meaning |
+| --- | --- | --- |
+| 400 | `{ "errors": [ …zod issues… ] }` | `sessionId` is not a UUID or `url` is empty. |
+| 400 | `{ "error": "Invalid url: …" }` | `url` is not a valid http or https URL. |
+| 401 | `{ "error": "Unauthorized" }` | Missing or wrong `BROWSER_API_KEY`. |
+| 404 | `{ "error": "Unknown session. Start a new session (it may have expired)." }` | The session does not exist or passed its 30-minute TTL. |
+| 503 | `{ "error": "…is not configured" }` | `BROWSER_USE_API_KEY` or `BROWSER_API_KEY` is unset. |
+
+## Related
+
+- [Start a login session](/api-reference/browser/session-start)
+- [Capture cookies](/api-reference/browser/cookies)

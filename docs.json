@@ -92,6 +92,16 @@
             ]
           },
           {
+            "group": "Browser Login Capture",
+            "pages": [
+              "api-reference/browser/overview",
+              "api-reference/browser/session-start",
+              "api-reference/browser/navigate",
+              "api-reference/browser/cookies",
+              "api-reference/browser/session-delete"
+            ]
+          },
+          {
             "group": "Webhooks",
             "pages": [
               "api-reference/webhooks/supplier",

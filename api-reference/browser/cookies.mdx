@@ -1,0 +1,98 @@
+---
+title: "Capture Cookies (POST /browser/cookies)"
+sidebarTitle: "Capture Cookies"
+description: "POST /browser/cookies captures the logged-in session's cookies, injects them into the Browser Use profile, and verifies they persisted. Retryable on 422 and 502."
+---
+
+Call this route after the user has finished logging in through the live view. It reads all cookies from the login browser, opens a fresh browser bound to the profile, injects the cookies over CDP, stops the browser to flush them into the profile, then reopens the profile to verify each cookie persisted (name, domain, path, and value must match).
+
+Expect the call to take roughly 20–40 seconds. It boots two browsers and waits for cookie flushes. Show a loading state and do not time out early.
+
+All `/browser/*` routes require `BROWSER_API_KEY` via `Authorization: Bearer` or `X-API-Key`. See [authentication](/api-reference/browser/overview#authentication).
+
+## Request
+
+`POST /browser/cookies`
+
+<ParamField body="sessionId" type="string" required>
+  UUID returned by [`POST /browser/session`](/api-reference/browser/session-start).
+</ParamField>
+
+```bash
+curl -X POST http://localhost:3001/browser/cookies \
+  -H "Authorization: Bearer $BROWSER_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"sessionId": "5f0c2f8e-9f0a-4a6b-8f0e-2b1c3d4e5f60"}'
+```
+
+## Response
+
+### 200 — Cookies captured and verified
+
+```json
+{
+  "profileId": "prof_…",
+  "profileName": "client-42/amazon",
+  "capturedCount": 12,
+  "uploadedCount": 12,
+  "failedCount": 0,
+  "promotedSessionCookies": 3,
+  "verifiedCount": 12,
+  "verified": true,
+  "domains": [".amazon.in"],
+  "verifiedDomains": [".amazon.in"],
+  "cookieDomains": ["amazon.in"],
+  "cookies": [
+    {
+      "name": "sid",
+      "domain": ".amazon.in",
+      "path": "/",
+      "secure": true,
+      "httpOnly": true,
+      "expires": 1793526400,
+      "session": false,
+      "verified": true
+    }
+  ]
+}
+```
+
+<ResponseField name="capturedCount" type="number">
+  Cookies read from the login browser.
+</ResponseField>
+
+<ResponseField name="uploadedCount" type="number">
+  Cookies injected into the profile browser. `failedCount` counts injection failures.
+</ResponseField>
+
+<ResponseField name="promotedSessionCookies" type="number">
+  Session-only cookies (no expiry) that were promoted so they persist in the profile.
+</ResponseField>
+
+<ResponseField name="verified" type="boolean">
+  `true` when every captured cookie was read back from the reopened profile with a matching value.
+</ResponseField>
+
+<ResponseField name="cookies" type="array">
+  Per-cookie metadata: `name`, `domain`, `path`, `secure`, `httpOnly`, `expires`, `session`, and `verified`. Cookie values are never returned.
+</ResponseField>
+
+On success the session is consumed: the login browser is stopped and the session record is deleted. In the connector flow, the `browser_profiles` registry entry is marked `connected`.
+
+## Errors
+
+Retryable failures keep the login browser and session alive, so you can retry the capture without asking the user to log in again.
+
+| Status | Body | Meaning |
+| --- | --- | --- |
+| 400 | `{ "errors": [ …zod issues… ] }` | `sessionId` is not a UUID. |
+| 401 | `{ "error": "Unauthorized" }` | Missing or wrong `BROWSER_API_KEY`. |
+| 404 | `{ "error": "Unknown session. Start a new session (it may have expired)." }` | The session does not exist or passed its 30-minute TTL. |
+| 422 | `{ "error": "No cookies captured yet — complete the login in the live view, then retry.", "retryable": true }` | The login is not finished. Wait, then retry. |
+| 502 | `{ "retryable": true, … }` | Some cookies failed to inject, or none could be verified. The body includes the same count fields as a `200`. Retry the capture. |
+| 503 | `{ "error": "…is not configured" }` | `BROWSER_USE_API_KEY` or `BROWSER_API_KEY` is unset. |
+
+## Related
+
+- [Start a login session](/api-reference/browser/session-start)
+- [Stop a login session](/api-reference/browser/session-delete)

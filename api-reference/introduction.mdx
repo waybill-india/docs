@@ -6,7 +6,7 @@ description: "Overview of the waybill-arc procurement agent API: base URLs, JSON
 
 waybill-arc is a procurement agent API that turns a free-text purchase request into a structured part spec, finds suppliers, and negotiates quotes. This reference covers every endpoint you need to start a request, answer clarifying questions, discover suppliers, and poll for the final award recommendation.
 
-All request and response bodies are JSON. There is no authentication on endpoints. The production deployment is currently behind Vercel Deployment Protection and returns 401, so use the local dev server for integration work.
+All request and response bodies are JSON. There is no authentication on endpoints, except the `/browser/*` routes, which require `BROWSER_API_KEY` via `Authorization: Bearer` or `X-API-Key`. The production deployment is currently behind Vercel Deployment Protection and returns 401, so use the local dev server for integration work.
 
 ## Base URLs
 
@@ -40,6 +40,10 @@ Show loading states and poll `GET /supervisor/:requestID` every 5–10 seconds a
 | POST | `/supervisor` | Internal: start a run with an explicit payload |
 | POST | `/webhook` | Internal: supplier gateway resume hook |
 | POST | `/webhook/vapi` | Internal: Vapi voice or SMS resume hook |
+| POST | `/browser/session` | Start a login-capture browser and profile |
+| POST | `/browser/navigate` | Drive the login browser to a URL |
+| POST | `/browser/cookies` | Capture, inject, and verify cookies into a profile |
+| DELETE | `/browser/session/:sessionId` | Stop a login session without capturing |
 
 A `requestID` is a UUID minted by `POST /intake`. It identifies the request across intake, search, and supervisor stages.
 

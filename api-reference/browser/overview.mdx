@@ -1,0 +1,48 @@
+---
+title: "Browser Login Capture Overview"
+sidebarTitle: "Overview"
+description: "Capture a human login through a remote Browser Use browser and persist the cookies into a reusable profile. Covers auth, session TTL, and the connector flow."
+---
+
+The `/browser/*` routes let a human log into a website through a remote browser's live view, then persist the resulting cookies into a named Browser Use profile. Later agent runs pass that profile ID to open the site already logged in. Use this when an agent task needs an authenticated session, such as purchasing from a marketplace with a client's own account.
+
+## Flow
+
+1. [`POST /browser/session`](/api-reference/browser/session-start) starts a remote browser and returns a `liveUrl`. Embed it in an iframe or open it in a tab.
+2. The user logs in themselves inside the live view. Passwords, OTPs, and 2FA all work because a real human drives the browser.
+3. [`POST /browser/navigate`](/api-reference/browser/navigate) drives the browser to another URL if needed. The live view has no address bar.
+4. [`POST /browser/cookies`](/api-reference/browser/cookies) captures the cookies, injects them into the profile, and verifies they persisted.
+5. [`DELETE /browser/session/:sessionId`](/api-reference/browser/session-delete) abandons the session without capturing anything.
+
+## Authentication
+
+All `/browser/*` routes require the `BROWSER_API_KEY` from your environment. Send it either way:
+
+```bash
+curl -H "Authorization: Bearer $BROWSER_API_KEY" …
+# or
+curl -H "X-API-Key: $BROWSER_API_KEY" …
+```
+
+Requests with a missing or wrong key return `401`. When `BROWSER_USE_API_KEY` or `BROWSER_API_KEY` is not configured, every `/browser/*` route returns `503`. See [Environment variables](/configuration/environment#browser-login-capture-browser-use).
+
+## Session TTL
+
+Login session state lives in the `browser_login_sessions` table, so sessions survive restarts and work across instances. Each session expires 30 minutes after creation. Requests that reference an expired session return `404`. Start a new session and repeat the login.
+
+## Connector flow vs standalone profiles
+
+`POST /browser/session` supports two modes:
+
+- **Connector flow** — pass `userId` and `site` together. The route reuses or creates the registry profile for that tenant in the `browser_profiles` table with status `pending`. A successful cookie capture marks it `connected`, so later agent runs can resolve the profile by `userId` and `site`.
+- **Standalone profile** — pass a `profileName`, or omit it to get a generated unique name. Nothing is written to the connector registry.
+
+<Note>
+  The database stores only profile IDs. Raw cookies and passwords never touch waybill-arc storage, and cookie values are never returned by any endpoint. Credentials stay between the user and the remote browser.
+</Note>
+
+## Related
+
+- [Start a login session](/api-reference/browser/session-start)
+- [Capture cookies](/api-reference/browser/cookies)
+- [Database setup](/configuration/database)
