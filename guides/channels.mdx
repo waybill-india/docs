@@ -1,10 +1,10 @@
 ---
-title: "Channels: Email, Voice, and SMS Outreach"
+title: "Channels: Email, Voice, SMS, and WhatsApp Outreach"
 sidebarTitle: "Channels"
-description: "Learn how waybill-arc sends RFQs over email, voice, and SMS through a unified channel layer, and how to register contacts and configure each provider."
+description: "Learn how waybill-arc sends RFQs over email, voice, SMS, and WhatsApp through a unified channel layer, and how to register contacts and configure each provider."
 ---
 
-waybill-arc sends RFQs to suppliers through a unified messaging layer in `src/channels/`. Each channel client (email via AgentMail, voice and SMS via Vapi, the supplier simulator, and WhatsApp later) implements the same `ChannelClient` contract. `src/channels/index.ts` is the only surface callers touch, so inbound replies and outbound sends share one interface regardless of the underlying provider.
+waybill-arc sends RFQs to suppliers through a unified messaging layer in `src/channels/`. Each channel client (email via AgentMail, voice and SMS via Vapi, WhatsApp via the Meta Cloud API, and the supplier simulator) implements the same `ChannelClient` contract. `src/channels/index.ts` is the only surface callers touch, so inbound replies and outbound sends share one interface regardless of the underlying provider.
 
 ## Unified channel API
 
@@ -44,9 +44,14 @@ INSERT INTO supplier_contacts (supplier_id, channel, address)
 VALUES
   ('SUP-00142', 'email', 'sales@supplier.example'),
   ('SUP-00142', 'voice', '+14155550123'),
-  ('SUP-00142', 'sms', '+14155550123')
+  ('SUP-00142', 'sms', '+14155550123'),
+  ('SUP-00142', 'whatsapp', '14155550123')
 ON CONFLICT (supplier_id, channel) DO UPDATE SET address = EXCLUDED.address;
 ```
+
+WhatsApp addresses are stored as digits only (`14155550123`). The client strips anything else, so a `+`-prefixed row also works.
+
+For web supplier candidates, `POST /search/:requestID/handoff` registers each selected candidate's `contactEmail` (email) or `contactPhone` (whatsapp) in `supplier_contacts` automatically before starting the supervisor run on that channel.
 
 ## Threads
 
@@ -55,6 +60,9 @@ ON CONFLICT (supplier_id, channel) DO UPDATE SET address = EXCLUDED.address;
 - For `voice`, the thread is the most recent Vapi call ID.
 - For `sms`, the thread is the Vapi session ID.
 - For `email`, the thread is managed by AgentMail.
+- For `whatsapp`, the thread is the supplier's `waId` (their WhatsApp number). When several requests share the same `waId`, an inbound reply resolves to the most recently messaged request.
+
+For `whatsapp`, the `channel_messages` table additionally maps every message ID to its `(request_id, supplier_id)`. A quoted reply (swipe-reply) resolves to the exact thread through the quoted message ID instead of the most recent one, and `getThread` only returns the messages that belong to that request and supplier.
 
 ## Email (AgentMail)
 
@@ -109,5 +117,66 @@ Required environment variables:
 | `VAPI_SMS_PHONE_NUMBER_ID` | SMS-enabled US Twilio number imported into Vapi |
 | `VAPI_WEBHOOK_URL` | Public URL of `POST /webhook/vapi` |
 | `VAPI_WEBHOOK_SECRET` | Shared secret echoed back as `x-waybill-signature` |
+
+## WhatsApp (Meta Cloud API)
+
+The `whatsapp` channel talks to the Meta WhatsApp Cloud API directly. waybill-arc owns the Meta credentials and the message store: a Prisma-managed `whatsapp` Postgres schema at `WHATSAPP_DATABASE_URL` that holds contacts, messages, status history, and idempotency keys. See [Database setup](/configuration/database) for the migration commands.
+
+Configuration is all-or-nothing. Set none of the variables to disable the channel, or set all seven required ones:
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `WHATSAPP_ACCESS_TOKEN` | — | Meta System User token for the Cloud API |
+| `WHATSAPP_PHONE_NUMBER_ID` | — | Numeric phone number ID (not the phone number) |
+| `WHATSAPP_BUSINESS_ACCOUNT_ID` | — | The WhatsApp Business Account (WABA) ID |
+| `WHATSAPP_APP_SECRET` | — | Verifies `x-hub-signature-256` on the Meta webhook |
+| `WHATSAPP_WEBHOOK_VERIFY_TOKEN` | — | Echoed in the Meta webhook GET handshake |
+| `WHATSAPP_API_KEY` | — | Bearer key protecting the `/api/*` channel endpoints |
+| `WHATSAPP_DATABASE_URL` | — | Postgres holding the `whatsapp` schema (message store) |
+| `WHATSAPP_DIRECT_URL` | — | Optional non-pooled URL used by `prisma migrate` |
+| `GRAPH_API_BASE_URL` | `https://graph.facebook.com` | Graph API host |
+| `GRAPH_API_VERSION` | `v26.0` | Graph API version |
+| `WHATSAPP_LIVE_DELIVERY` | `false` | `false` redirects every RFQ to `WHATSAPP_TEST_NUMBER`; `true` messages real suppliers |
+| `WHATSAPP_TEST_NUMBER` | — | Where redirected messages land; required while `WHATSAPP_LIVE_DELIVERY` is `false` |
+
+### Test delivery mode
+
+While `WHATSAPP_LIVE_DELIVERY` is `false`, every message goes to `WHATSAPP_TEST_NUMBER` no matter which supplier it was addressed to, with the supplier ID prefixed onto the message body (WhatsApp has no subject line). This lets you exercise a run end to end without contacting anyone real.
+
+WhatsApp has no server-side threads, so when replying from the test number, quote (swipe-reply) the message you are answering. The quoted message ID routes the reply to the right supplier through `channel_messages`. An unquoted reply falls back to the most recently messaged supplier.
+
+Set `WHATSAPP_LIVE_DELIVERY=true` only when you intend to contact real suppliers.
+
+### Meta webhook setup
+
+Point your Meta app's webhook at `https://your-host/webhook/whatsapp`:
+
+- The `GET` verification handshake echoes `hub.challenge` when `hub.verify_token` matches `WHATSAPP_WEBHOOK_VERIFY_TOKEN`.
+- `POST` events are verified against `WHATSAPP_APP_SECRET` via the `x-hub-signature-256` header.
+
+Inbound messages are persisted to the message store, then dispatched in-process to the agent. A quoted reply resolves to its exact thread by message ID through `channel_messages`; anything else is looked up by the sender's `waId`. Redeliveries are deduped on the thread's last recorded message ID. Any failure returns `500` so Meta redelivers. See [Webhooks](/guides/webhooks) for the full endpoint behavior.
+
+### 24-hour service window
+
+<Warning>
+  Meta only allows free-form messages within 24 hours of the supplier's last inbound message. The client checks the window before calling Meta and refuses the send while the window is explicitly closed, so nothing leaves and the send fails cleanly. On a first touch the window is unknown (`null`), which only logs a warning: Meta accepts the text, then fails it asynchronously with error `131047`, which arrives as a status event and never surfaces to the agent. Reliable first-touch outreach needs an approved template, which this channel does not send yet.
+</Warning>
+
+### One conversation per supplier
+
+A supplier has one WhatsApp conversation, not one per request. `getThread` only returns messages attributed to its request and supplier in `channel_messages`, so concurrent requests do not leak into each other. An unquoted inbound reply is attributed to the most recently messaged thread, which may be the wrong one when several are active. Quoted replies always land correctly.
+
+### Channel API
+
+The full WhatsApp channel API (messages, conversations, media, templates, phone number, business profile, setup) is exposed under `/api/*`. Every route requires `Authorization: Bearer <WHATSAPP_API_KEY>` (or `X-API-Key`) and returns `503` when the channel is unconfigured.
+
+```bash
+curl -X POST http://localhost:3001/api/messages \
+  -H "Authorization: Bearer $WHATSAPP_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "to": "14155550123", "type": "text", "text": { "body": "hello" } }'
+```
+
+The response includes `serviceWindowOpen`: `false` when the recipient is outside the 24-hour service window (free-form sends will fail, so use a template) and `null` when the recipient has never messaged in.
 
 For how inbound webhooks resume the supervisor, see [Webhooks](/guides/webhooks). For the full list of environment variables, see [Environment Variables](/configuration/environment).
