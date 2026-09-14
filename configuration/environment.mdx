@@ -70,6 +70,8 @@ Configuration is all-or-nothing: set none of the variables to disable the channe
 | `WHATSAPP_DIRECT_URL` | — | Optional non-pooled URL used by `prisma migrate` |
 | `GRAPH_API_BASE_URL` | `https://graph.facebook.com` | Graph API host |
 | `GRAPH_API_VERSION` | `v26.0` | Graph API version |
+| `WHATSAPP_LIVE_DELIVERY` | `false` | `false` redirects every RFQ to `WHATSAPP_TEST_NUMBER`; `true` messages real suppliers |
+| `WHATSAPP_TEST_NUMBER` | — | Where redirected messages land; required while `WHATSAPP_LIVE_DELIVERY` is `false` |
 
 ## Example `.env`
 
@@ -115,6 +117,8 @@ WHATSAPP_DATABASE_URL=postgresql://user:pass@host:5432/dbname
 # WHATSAPP_DIRECT_URL=postgresql://user:pass@host:5432/dbname
 # GRAPH_API_BASE_URL=https://graph.facebook.com
 # GRAPH_API_VERSION=v26.0
+WHATSAPP_LIVE_DELIVERY=false
+WHATSAPP_TEST_NUMBER=+919999999999
 ```
 
 See also:

@@ -51,6 +51,8 @@ ON CONFLICT (supplier_id, channel) DO UPDATE SET address = EXCLUDED.address;
 
 WhatsApp addresses are stored as digits only (`14155550123`). The client strips anything else, so a `+`-prefixed row also works.
 
+For web supplier candidates, `POST /search/:requestID/handoff` registers each selected candidate's `contactEmail` (email) or `contactPhone` (whatsapp) in `supplier_contacts` automatically before starting the supervisor run on that channel.
+
 ## Threads
 
 `channel_threads` maps `(request_id, supplier_id, channel)` to the provider thread so replies stay in-thread and inbound webhooks can recover the request context.
@@ -58,7 +60,9 @@ WhatsApp addresses are stored as digits only (`14155550123`). The client strips 
 - For `voice`, the thread is the most recent Vapi call ID.
 - For `sms`, the thread is the Vapi session ID.
 - For `email`, the thread is managed by AgentMail.
-- For `whatsapp`, the thread is the supplier's `waId` (their WhatsApp number). When several requests share the same `waId`, an inbound reply resolves to the most recently created request.
+- For `whatsapp`, the thread is the supplier's `waId` (their WhatsApp number). When several requests share the same `waId`, an inbound reply resolves to the most recently messaged request.
+
+For `whatsapp`, the `channel_messages` table additionally maps every message ID to its `(request_id, supplier_id)`. A quoted reply (swipe-reply) resolves to the exact thread through the quoted message ID instead of the most recent one, and `getThread` only returns the messages that belong to that request and supplier.
 
 ## Email (AgentMail)
 
@@ -132,6 +136,16 @@ Configuration is all-or-nothing. Set none of the variables to disable the channe
 | `WHATSAPP_DIRECT_URL` | — | Optional non-pooled URL used by `prisma migrate` |
 | `GRAPH_API_BASE_URL` | `https://graph.facebook.com` | Graph API host |
 | `GRAPH_API_VERSION` | `v26.0` | Graph API version |
+| `WHATSAPP_LIVE_DELIVERY` | `false` | `false` redirects every RFQ to `WHATSAPP_TEST_NUMBER`; `true` messages real suppliers |
+| `WHATSAPP_TEST_NUMBER` | — | Where redirected messages land; required while `WHATSAPP_LIVE_DELIVERY` is `false` |
+
+### Test delivery mode
+
+While `WHATSAPP_LIVE_DELIVERY` is `false`, every message goes to `WHATSAPP_TEST_NUMBER` no matter which supplier it was addressed to, with the supplier ID prefixed onto the message body (WhatsApp has no subject line). This lets you exercise a run end to end without contacting anyone real.
+
+WhatsApp has no server-side threads, so when replying from the test number, quote (swipe-reply) the message you are answering. The quoted message ID routes the reply to the right supplier through `channel_messages`. An unquoted reply falls back to the most recently messaged supplier.
+
+Set `WHATSAPP_LIVE_DELIVERY=true` only when you intend to contact real suppliers.
 
 ### Meta webhook setup
 
@@ -140,13 +154,17 @@ Point your Meta app's webhook at `https://your-host/webhook/whatsapp`:
 - The `GET` verification handshake echoes `hub.challenge` when `hub.verify_token` matches `WHATSAPP_WEBHOOK_VERIFY_TOKEN`.
 - `POST` events are verified against `WHATSAPP_APP_SECRET` via the `x-hub-signature-256` header.
 
-Inbound messages are persisted to the message store, then dispatched in-process to the agent. The thread is looked up by the sender's `waId` and redeliveries are deduped on the thread's last recorded message ID. Any failure returns `500` so Meta redelivers. See [Webhooks](/guides/webhooks) for the full endpoint behavior.
+Inbound messages are persisted to the message store, then dispatched in-process to the agent. A quoted reply resolves to its exact thread by message ID through `channel_messages`; anything else is looked up by the sender's `waId`. Redeliveries are deduped on the thread's last recorded message ID. Any failure returns `500` so Meta redelivers. See [Webhooks](/guides/webhooks) for the full endpoint behavior.
 
 ### 24-hour service window
 
 <Warning>
-  Meta only allows free-form messages within 24 hours of the supplier's last inbound message. Outside that window, a free-form text fails with Meta error `131047`, which arrives as a status event after the send is accepted. It never surfaces to the agent as an HTTP error. Use an approved template to reach a supplier outside the window.
+  Meta only allows free-form messages within 24 hours of the supplier's last inbound message. The client checks the window before calling Meta and refuses the send while the window is explicitly closed, so nothing leaves and the send fails cleanly. On a first touch the window is unknown (`null`), which only logs a warning: Meta accepts the text, then fails it asynchronously with error `131047`, which arrives as a status event and never surfaces to the agent. Reliable first-touch outreach needs an approved template, which this channel does not send yet.
 </Warning>
+
+### One conversation per supplier
+
+A supplier has one WhatsApp conversation, not one per request. `getThread` only returns messages attributed to its request and supplier in `channel_messages`, so concurrent requests do not leak into each other. An unquoted inbound reply is attributed to the most recently messaged thread, which may be the wrong one when several are active. Quoted replies always land correctly.
 
 ### Channel API
 

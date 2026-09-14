@@ -97,7 +97,12 @@ Meta signs every `POST` with the `x-hub-signature-256` header, an HMAC-SHA256 he
 
 ### Event handling
 
-Every event is persisted to the WhatsApp message store. Inbound text messages are then matched to a request/supplier pair through `channel_threads` on the sender's `waId` and resume the supervisor. When several requests share the same `waId`, the most recently created request wins. Delivery statuses, unmapped senders, redeliveries of an already-recorded message, and non-text messages are recorded but deliberately ignored.
+Every event is persisted to the WhatsApp message store. Inbound text messages are then matched to a request/supplier pair and resume the supervisor:
+
+- A quoted reply (swipe-reply) resolves exactly through `channel_messages`: the quoted message ID names its thread.
+- Anything else resolves through `channel_threads` on the sender's `waId`. When several requests share the same `waId`, the most recently messaged thread wins.
+
+Delivery statuses, unmapped senders, redeliveries of an already-recorded message, and non-text messages are recorded but deliberately ignored.
 
 ### Response codes
 
@@ -106,11 +111,11 @@ Every event is persisted to the WhatsApp message store. Inbound text messages ar
 | `200 OK` | Event processed, including deliberately ignored events |
 | `400` | Malformed JSON |
 | `401` | Invalid signature |
-| `500` | Persistence or agent dispatch failed; Meta redelivers with backoff, and the last-message-ID dedupe keeps redeliveries from double-resuming the run |
+| `500` | Persistence or agent dispatch failed; Meta redelivers with backoff. The last-message-ID dedupe keeps redeliveries from double-resuming the run, and a failed dispatch rolls that marker back so the retry is processed rather than skipped |
 | `503` | WhatsApp channel is not configured (`WHATSAPP_*` variables unset) |
 
 ### Failure modes
 
-Outbound send failures that happen after Meta accepts a message do not arrive as HTTP errors. Most notably, a free-form text sent outside the 24-hour service window fails with Meta error `131047`. These failures arrive as status events and are recorded on the message, so they never surface to the agent.
+The client refuses an outbound send while the 24-hour service window is explicitly closed, so that failure surfaces before Meta is called. Send failures that happen after Meta accepts a message, such as a first-touch text failing asynchronously with Meta error `131047`, arrive as status events and are recorded on the message, so they never surface to the agent.
 
 For endpoint reference, see [POST /webhook](/api-reference/webhooks/supplier), [POST /webhook/vapi](/api-reference/webhooks/vapi), and [GET + POST /webhook/whatsapp](/api-reference/webhooks/whatsapp). For channel setup and environment variables, see [Channels](/guides/channels).
