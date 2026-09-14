@@ -1,0 +1,166 @@
+---
+title: "List Conversations and Messages"
+sidebarTitle: "Conversations"
+description: "GET /api/conversations lists WhatsApp contacts with their latest message and service-window state. GET /api/conversations/:waId/messages pages one conversation."
+---
+
+The WhatsApp channel stores every contact and message it sees. Use these endpoints to build an inbox view: list conversations ordered by the most recent inbound message, then page through a single conversation's history.
+
+## Authentication
+
+Every `/api/*` route requires the API key. Send it as `Authorization: Bearer <WHATSAPP_API_KEY>` or as an `X-API-Key` header. See the [WhatsApp channel overview](/api-reference/whatsapp/overview) for the shared authentication and error behavior.
+
+## The 24-hour service window
+
+WhatsApp only allows free-form messages within 24 hours of the contact's last inbound message. Outside that window, only template messages are deliverable. Each conversation in the list carries its window state so you can decide whether to send free-form or a template. The same signal is returned as `serviceWindowOpen` on [POST /api/messages](/api-reference/whatsapp/send-message).
+
+## List conversations
+
+```http
+GET /api/conversations
+```
+
+Returns contacts ordered by most recent inbound message first. Contacts who have never messaged in sort last.
+
+### Query parameters
+
+<ParamField query="limit" type="integer" default="25">
+  Number of conversations to return. Maximum `100`.
+</ParamField>
+
+<ParamField query="offset" type="integer" default="0">
+  Number of conversations to skip, for offset pagination.
+</ParamField>
+
+### Response
+
+<ResponseField name="conversations" type="array">
+  One entry per contact. Each entry has:
+
+  - `waId`: the contact's WhatsApp ID (phone number in international format without `+`).
+  - `profileName`: the contact's WhatsApp profile name, or `null`.
+  - `lastInboundAt`: unix timestamp (seconds) of the contact's last inbound message, or `null`.
+  - `serviceWindowExpiresAt`: unix timestamp when the 24-hour window closes, or `null` if the contact never messaged in.
+  - `serviceWindowOpen`: `true` when a free-form message is currently deliverable.
+  - `lastMessage`: the most recent message in either direction, or `null`. Same shape as the record returned by [GET /api/messages/:wamid](/api-reference/whatsapp/messages).
+</ResponseField>
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl "http://localhost:3001/api/conversations?limit=10&offset=0" \
+  -H "Authorization: Bearer $WHATSAPP_API_KEY"
+```
+
+</CodeGroup>
+
+```json
+{
+  "conversations": [
+    {
+      "waId": "15551234567",
+      "profileName": "Priya at Acme Components",
+      "lastInboundAt": 1730000100,
+      "serviceWindowExpiresAt": 1730086500,
+      "serviceWindowOpen": true,
+      "lastMessage": {
+        "wamid": "wamid.HBgL…",
+        "direction": "inbound",
+        "waId": "15551234567",
+        "type": "text",
+        "payload": { "body": "We can quote 1.87 USD at 2k units." },
+        "status": null,
+        "statusTimestamp": null,
+        "errors": null,
+        "timestamp": 1730000100,
+        "createdAt": 1730000101
+      }
+    }
+  ]
+}
+```
+
+## List messages in a conversation
+
+```http
+GET /api/conversations/:waId/messages
+```
+
+Returns one contact's messages, newest first. Page with either `before` for time-based paging or `cursor` for stable cursor paging. To fetch the next page, pass the `wamid` of the last message from the previous page as `cursor`.
+
+### Path parameters
+
+<ParamField path="waId" type="string" required>
+  The contact's WhatsApp ID, for example `15551234567`.
+</ParamField>
+
+### Query parameters
+
+<ParamField query="limit" type="integer" default="50">
+  Number of messages to return. Maximum `100`.
+</ParamField>
+
+<ParamField query="before" type="integer">
+  Unix timestamp in seconds. Only messages older than this timestamp are returned. Invalid values return a `400`.
+</ParamField>
+
+<ParamField query="cursor" type="string">
+  A `wamid` from a previous page. Returns messages strictly older than that message. An unknown cursor, or one belonging to a different contact, returns an empty list.
+</ParamField>
+
+### Response
+
+<ResponseField name="messages" type="array">
+  Message records, newest first. Same shape as the record returned by [GET /api/messages/:wamid](/api-reference/whatsapp/messages).
+</ResponseField>
+
+### Example
+
+<CodeGroup>
+
+```bash cURL
+curl "http://localhost:3001/api/conversations/15551234567/messages?limit=50" \
+  -H "Authorization: Bearer $WHATSAPP_API_KEY"
+```
+
+```bash cURL (next page)
+curl "http://localhost:3001/api/conversations/15551234567/messages?limit=50&cursor=wamid.HBgL…" \
+  -H "Authorization: Bearer $WHATSAPP_API_KEY"
+```
+
+</CodeGroup>
+
+```json
+{
+  "messages": [
+    {
+      "wamid": "wamid.HBgL…",
+      "direction": "outbound",
+      "waId": "15551234567",
+      "type": "text",
+      "payload": { "body": "Thanks, we will review the quote." },
+      "status": "read",
+      "statusTimestamp": 1730000130,
+      "errors": null,
+      "timestamp": 1730000125,
+      "createdAt": 1730000125
+    }
+  ]
+}
+```
+
+## Errors
+
+| Status | Body | Meaning |
+| --- | --- | --- |
+| 400 | `{ "error": { "message": "\"before\" must be a unix timestamp in seconds" } }` | `before` is not a valid unix timestamp in seconds. |
+| 401 | `{ "error": { "message": "Unauthorized — provide the API key via \"Authorization: Bearer <key>\" or \"X-API-Key\"." } }` | Missing or wrong API key. |
+| 503 | `{ "error": { "message": "WhatsApp channel is not configured" } }` | The `WHATSAPP_*` environment variables are not set. |
+
+## Related
+
+- [Send a Message](/api-reference/whatsapp/send-message)
+- [Messages](/api-reference/whatsapp/messages)
+- [WhatsApp Webhook](/api-reference/webhooks/whatsapp)

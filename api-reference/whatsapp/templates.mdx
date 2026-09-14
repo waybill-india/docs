@@ -1,0 +1,138 @@
+---
+title: "Manage Message Templates"
+sidebarTitle: "Templates"
+description: "List, create, and delete WhatsApp message templates through GET, POST, and DELETE /api/templates."
+---
+
+Message templates are pre-approved message formats reviewed by Meta. You need a template to message a recipient outside the 24-hour customer service window. Free-form sends fail outside that window, so submit templates ahead of time and send them with the `template` message type on [POST /api/messages](/api-reference/whatsapp/send-message).
+
+## Endpoints
+
+```http
+GET /api/templates
+POST /api/templates
+DELETE /api/templates
+```
+
+## Authentication
+
+Send the API key as `Authorization: Bearer <WHATSAPP_API_KEY>` or in the `X-API-Key` header. Requests without a valid key return `401`. When the WhatsApp environment variables are unset, every route returns `503`. See the [WhatsApp channel overview](/api-reference/whatsapp/overview) for shared authentication and error behavior.
+
+## List templates
+
+`GET /api/templates` returns the templates on your WhatsApp Business Account, including their Meta review status.
+
+<ParamField query="limit" type="integer" default="50">
+  Maximum number of templates to return. Between 1 and 200.
+</ParamField>
+
+<ParamField query="after" type="string">
+  Pagination cursor from a previous response's `paging.cursors.after`. Pass it to fetch the next page.
+</ParamField>
+
+The response is Meta's list shape: a `data` array plus a `paging` object with cursors.
+
+<ResponseField name="data" type="array">
+  Templates. Each entry includes `id`, `name`, `status` (review status such as `APPROVED`, `PENDING`, or `REJECTED`), `category`, `language`, `components`, and `quality_score`.
+</ResponseField>
+
+<ResponseField name="paging" type="object">
+  Meta pagination object. Use `paging.cursors.after` as the `after` query parameter for the next page.
+</ResponseField>
+
+## Create a template
+
+`POST /api/templates` submits a new template for Meta review. The template is not usable until its `status` becomes `APPROVED`.
+
+<ParamField body="name" type="string" required>
+  Template name. Lowercase letters, digits, and underscores only. Up to 512 characters.
+</ParamField>
+
+<ParamField body="category" type="string" required>
+  One of `AUTHENTICATION`, `MARKETING`, or `UTILITY`.
+</ParamField>
+
+<ParamField body="language" type="string" required>
+  Template language code, for example `en_US`.
+</ParamField>
+
+<ParamField body="components" type="array" required>
+  Template components as defined by Meta (header, body, footer, buttons). At least one component is required.
+</ParamField>
+
+<ParamField body="parameter_format" type="string">
+  `POSITIONAL` or `NAMED`. Controls how placeholder variables are written in the components.
+</ParamField>
+
+<ParamField body="allow_category_change" type="boolean">
+  Let Meta reassign the category during review instead of rejecting the template.
+</ParamField>
+
+On success the endpoint returns `201` with the new template's `id`, `status`, and `category`.
+
+## Delete a template
+
+`DELETE /api/templates` removes a template by name.
+
+<ParamField query="name" type="string" required>
+  Name of the template to delete. Deleting by name removes all language variants unless you also pass `hsmId`.
+</ParamField>
+
+<ParamField query="hsmId" type="string">
+  Specific template ID. Pass it to delete only that template instead of every template with the given name.
+</ParamField>
+
+Returns `{ "success": true }`. Omitting `name` returns `400`.
+
+## Example
+
+<CodeGroup>
+
+```bash List templates
+curl "http://localhost:3001/api/templates?limit=10" \
+  -H "Authorization: Bearer $WHATSAPP_API_KEY"
+```
+
+```bash Create a template
+curl -X POST http://localhost:3001/api/templates \
+  -H "Authorization: Bearer $WHATSAPP_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "quote_followup",
+    "category": "UTILITY",
+    "language": "en_US",
+    "components": [
+      {
+        "type": "BODY",
+        "text": "Hi {{1}}, do you have an updated quote for {{2}}?"
+      }
+    ]
+  }'
+```
+
+</CodeGroup>
+
+```json 201 response
+{
+  "id": "1234567890",
+  "status": "PENDING",
+  "category": "UTILITY"
+}
+```
+
+## Errors
+
+| Status | Body | Meaning |
+| --- | --- | --- |
+| 400 | `{ "error": { "message": "Invalid template payload", "issues": [ … ] } }` | The create body failed validation. |
+| 400 | `{ "error": { "message": "Query parameter \"name\" is required" } }` | Delete was called without `name`. |
+| 401 | `{ "error": { "message": "Unauthorized — provide the API key via \"Authorization: Bearer <key>\" or \"X-API-Key\"." } }` | Missing or invalid API key. |
+| 503 | `{ "error": { "message": "WhatsApp channel is not configured" } }` | The `WHATSAPP_*` environment variables are unset. |
+
+Graph API failures pass through with Meta's status code and a serialized error body that includes a `hint` for known error codes. See the [overview](/api-reference/whatsapp/overview) for the full error envelope.
+
+## Related
+
+- [Send a Message](/api-reference/whatsapp/send-message)
+- [WhatsApp Channel Overview](/api-reference/whatsapp/overview)
+- [Environment Variables](/configuration/environment)

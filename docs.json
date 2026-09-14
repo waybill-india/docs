@@ -95,7 +95,22 @@
             "group": "Webhooks",
             "pages": [
               "api-reference/webhooks/supplier",
-              "api-reference/webhooks/vapi"
+              "api-reference/webhooks/vapi",
+              "api-reference/webhooks/whatsapp"
+            ]
+          },
+          {
+            "group": "WhatsApp Channel",
+            "pages": [
+              "api-reference/whatsapp/overview",
+              "api-reference/whatsapp/send-message",
+              "api-reference/whatsapp/messages",
+              "api-reference/whatsapp/conversations",
+              "api-reference/whatsapp/media",
+              "api-reference/whatsapp/templates",
+              "api-reference/whatsapp/phone-number",
+              "api-reference/whatsapp/business-profile",
+              "api-reference/whatsapp/setup"
             ]
           },
           {

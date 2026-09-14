@@ -1,12 +1,12 @@
 ---
 title: "API Reference Overview"
 sidebarTitle: "Introduction"
-description: "Overview of the waybill-arc procurement agent API: base URLs, JSON bodies, no auth, and the 10 endpoints that move a request from intake to award."
+description: "Overview of the waybill-arc procurement agent API: base URLs, JSON bodies, endpoints from intake to award, and the authenticated WhatsApp channel API under /api/*."
 ---
 
 waybill-arc is a procurement agent API that turns a free-text purchase request into a structured part spec, finds suppliers, and negotiates quotes. This reference covers every endpoint you need to start a request, answer clarifying questions, discover suppliers, and poll for the final award recommendation.
 
-All request and response bodies are JSON. There is no authentication on endpoints. The production deployment is currently behind Vercel Deployment Protection and returns 401, so use the local dev server for integration work.
+All request and response bodies are JSON. There is no authentication on the procurement endpoints. The exception is the WhatsApp channel API under `/api/*`, which requires `Authorization: Bearer <WHATSAPP_API_KEY>` (or the `X-API-Key` header). See the [WhatsApp channel API overview](/api-reference/whatsapp/overview) for details. The production deployment is currently behind Vercel Deployment Protection and returns 401, so use the local dev server for integration work.
 
 ## Base URLs
 
@@ -40,6 +40,9 @@ Show loading states and poll `GET /supervisor/:requestID` every 5–10 seconds a
 | POST | `/supervisor` | Internal: start a run with an explicit payload |
 | POST | `/webhook` | Internal: supplier gateway resume hook |
 | POST | `/webhook/vapi` | Internal: Vapi voice or SMS resume hook |
+| GET | `/webhook/whatsapp` | Meta webhook verification handshake |
+| POST | `/webhook/whatsapp` | Meta webhook: inbound messages and statuses |
+| * | `/api/*` | WhatsApp channel API: send, media, templates |
 
 A `requestID` is a UUID minted by `POST /intake`. It identifies the request across intake, search, and supervisor stages.
 

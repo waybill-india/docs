@@ -1,0 +1,81 @@
+---
+title: "Webhook Setup"
+sidebarTitle: "Setup"
+description: "Subscribe the Meta app to your WhatsApp Business Account with POST /api/setup/subscribe and inspect subscriptions with GET /api/setup/subscriptions."
+---
+
+Meta only delivers inbound messages and delivery statuses to [POST /webhook/whatsapp](/api-reference/webhooks/whatsapp) after your Meta app is subscribed to the WhatsApp Business Account's webhooks. These endpoints create and inspect that subscription.
+
+## Endpoints
+
+```http
+POST /api/setup/subscribe
+GET /api/setup/subscriptions
+```
+
+## Authentication
+
+Send the API key as `Authorization: Bearer <WHATSAPP_API_KEY>` or in the `X-API-Key` header. Requests without a valid key return `401`. When the WhatsApp environment variables are unset, every route returns `503`. See the [WhatsApp channel overview](/api-reference/whatsapp/overview) for shared authentication and error behavior.
+
+## Before you subscribe
+
+The webhook callback URL and verify token are configured in the Meta app dashboard, not through this API. In the dashboard, set the callback URL to your publicly reachable `/webhook/whatsapp` endpoint and set the verify token to the same value as your `WHATSAPP_WEBHOOK_VERIFY_TOKEN` environment variable. Meta sends a verification handshake to the webhook when you save, and the handshake fails if the tokens do not match. See [Environment Variables](/configuration/environment) for the full list of WhatsApp settings.
+
+## Subscribe the app
+
+`POST /api/setup/subscribe` subscribes the Meta app to the WhatsApp Business Account identified by `WHATSAPP_BUSINESS_ACCOUNT_ID`. After this call, Meta starts delivering message and status events to `/webhook/whatsapp`. The endpoint takes no request body and is safe to call again if you are unsure whether the subscription exists.
+
+Returns `{ "success": true }`.
+
+## List subscriptions
+
+`GET /api/setup/subscriptions` lists the apps currently subscribed to the WhatsApp Business Account. Use it to confirm the subscription succeeded.
+
+<ResponseField name="data" type="array">
+  Subscribed apps as returned by Meta. Each entry describes one app subscription on the account.
+</ResponseField>
+
+## Example
+
+<CodeGroup>
+
+```bash Subscribe
+curl -X POST http://localhost:3001/api/setup/subscribe \
+  -H "Authorization: Bearer $WHATSAPP_API_KEY"
+```
+
+```bash List subscriptions
+curl http://localhost:3001/api/setup/subscriptions \
+  -H "Authorization: Bearer $WHATSAPP_API_KEY"
+```
+
+</CodeGroup>
+
+```json GET response
+{
+  "data": [
+    {
+      "whatsapp_business_api_data": {
+        "id": "1234567890",
+        "name": "Waybill Procurement App",
+        "link": "https://www.facebook.com/games/?app_id=1234567890"
+      }
+    }
+  ]
+}
+```
+
+## Errors
+
+| Status | Body | Meaning |
+| --- | --- | --- |
+| 401 | `{ "error": { "message": "Unauthorized — provide the API key via \"Authorization: Bearer <key>\" or \"X-API-Key\"." } }` | Missing or invalid API key. |
+| 503 | `{ "error": { "message": "WhatsApp channel is not configured" } }` | The `WHATSAPP_*` environment variables are unset. |
+
+Graph API failures pass through with Meta's status code and a serialized error body. See the [overview](/api-reference/whatsapp/overview) for the full error envelope.
+
+## Related
+
+- [WhatsApp Webhook](/api-reference/webhooks/whatsapp)
+- [WhatsApp Channel Overview](/api-reference/whatsapp/overview)
+- [Environment Variables](/configuration/environment)

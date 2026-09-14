@@ -1,0 +1,176 @@
+---
+title: "Send a Message (POST /api/messages)"
+sidebarTitle: "Send Message"
+description: "POST /api/messages sends a WhatsApp message of any supported type, with optional idempotent retries via the Idempotency-Key header."
+---
+
+Send a WhatsApp message to a recipient with `POST /api/messages`. The endpoint supports every Cloud API message type: text, media, location, reaction, contacts, template, and interactive. On success it returns the Meta message ID (`wamid`) and tells you whether the 24-hour customer service window is open for the recipient.
+
+## Endpoint
+
+```http
+POST /api/messages
+```
+
+## Headers
+
+<ParamField header="Authorization" type="string" required>
+  `Bearer <WHATSAPP_API_KEY>`. Alternatively send the key in `X-API-Key`. See [authentication](/api-reference/whatsapp/overview#authentication).
+</ParamField>
+
+<ParamField header="Idempotency-Key" type="string">
+  Optional key that makes retries safe. See [Idempotency](#idempotency).
+</ParamField>
+
+## Request body
+
+### Common fields
+
+Every message type shares these fields:
+
+<ParamField body="to" type="string" required>
+  Recipient phone number as digits in international format, for example `15551234567`. A leading `+` is accepted.
+</ParamField>
+
+<ParamField body="type" type="string" required>
+  One of `text`, `image`, `audio`, `video`, `document`, `sticker`, `location`, `reaction`, `contacts`, `template`, `interactive`. The body must also include an object with the same name as the type.
+</ParamField>
+
+<ParamField body="recipient_type" type="string">
+  `individual` (default) or `group`.
+</ParamField>
+
+<ParamField body="context.message_id" type="string">
+  The `wamid` of a message to reply to. The send renders as a quoted reply.
+</ParamField>
+
+<ParamField body="biz_opaque_callback_data" type="string">
+  Opaque string up to 512 characters that Meta echoes back on status webhooks for this message.
+</ParamField>
+
+### Message types
+
+Each type carries a payload object keyed by the type name.
+
+| Type | Payload | Description |
+| --- | --- | --- |
+| `text` | `text: { body, preview_url? }` | Plain text up to 4096 characters. Set `preview_url: true` to render link previews. |
+| `image` | `image: { id \| link, caption? }` | An image, with an optional caption up to 1024 characters. |
+| `audio` | `audio: { id \| link }` | An audio clip or voice note. No caption. |
+| `video` | `video: { id \| link, caption? }` | A video, with an optional caption up to 1024 characters. |
+| `document` | `document: { id \| link, caption?, filename? }` | A file attachment. `filename` (up to 240 characters) sets the display name. |
+| `sticker` | `sticker: { id \| link }` | A WebP sticker. No caption. |
+| `location` | `location: { latitude, longitude, name?, address? }` | A pinned map location. |
+| `reaction` | `reaction: { message_id, emoji }` | React to a message by `wamid` with a single emoji. Send an empty string to remove the reaction. |
+| `contacts` | `contacts: [ { name: { formatted_name }, … } ]` | One or more contact cards. Each contact needs at least `name.formatted_name`. Additional Cloud API contact fields pass through. |
+| `template` | `template: { name, language: { code }, components? }` | An approved message template. `name` and `language.code` are required. `components` fills header, body, and button variables. |
+| `interactive` | `interactive: { type, action, header?, body?, footer? }` | An interactive message. `body.text` is capped at 1024 characters and `footer.text` at 60. |
+
+Media types (`image`, `audio`, `video`, `document`, `sticker`) take exactly one of `id` (a media ID from [POST /api/media](/api-reference/whatsapp/media)) or `link` (a public URL). Providing both, or neither, is a `400`.
+
+Interactive `type` is one of `button`, `list`, `cta_url`, `location_request_message`, `address_message`, `flow`, `catalog_message`, `product`, `product_list`, `order_details`, `order_status`, or `call_permission_request`. The shape of `action` follows the Cloud API for the chosen subtype.
+
+## Idempotency
+
+Network retries can double-send a message. To prevent that, pass a unique `Idempotency-Key` header per logical send:
+
+- The first request with a key performs the send and stores the resulting `wamid` against the key.
+- A retry with the same key returns `200` with `"status": "duplicate"` and the original `wamid`. No second message is sent.
+- If the first send is still in flight, the retry returns `409` with `{ "error": { "message": "A send with this Idempotency-Key is already in progress" } }`. Wait briefly and retry.
+- Keys expire after a TTL, so do not reuse them for unrelated sends.
+
+## Response
+
+### 201 — Accepted
+
+<ResponseField name="wamid" type="string">
+  Meta's message ID. Use it to look up the message and its delivery-status history via [GET /api/messages/:wamid](/api-reference/whatsapp/messages), and as `context.message_id` or `reaction.message_id` in later sends.
+</ResponseField>
+
+<ResponseField name="to" type="string">
+  The recipient's WhatsApp ID as normalized by Meta.
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  `"accepted"`, or Meta's message status when it reports one.
+</ResponseField>
+
+<ResponseField name="serviceWindowOpen" type="boolean | null">
+  Whether the 24-hour customer service window is open for this recipient. `true` means the recipient messaged in within the last 24 hours and free-form sends are allowed. `false` means the window has lapsed, so free-form sends will fail with Meta error `131047`. Send an approved template instead. `null` means the recipient has never messaged in.
+</ResponseField>
+
+```json
+{
+  "wamid": "wamid.HBgLMTU1NTEyMzQ1NjcVAgARGBI5QzY3…",
+  "to": "15551234567",
+  "status": "accepted",
+  "serviceWindowOpen": true
+}
+```
+
+<Warning>
+  A `201` means Meta accepted the send. It does not guarantee delivery. Failures that happen afterward, such as a free-form message sent outside the service window, arrive as status events and are recorded on the message. Check them with [GET /api/messages/:wamid](/api-reference/whatsapp/messages).
+</Warning>
+
+### 200 — Duplicate
+
+Returned when the `Idempotency-Key` was already used for a completed send. The body matches the `201` shape with `"status": "duplicate"` and the original `wamid`.
+
+## Examples
+
+<CodeGroup>
+
+```bash Text message
+curl -X POST http://localhost:3001/api/messages \
+  -H "Authorization: Bearer $WHATSAPP_API_KEY" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: rfq-299cb5b9-msg-1" \
+  -d '{
+    "to": "15551234567",
+    "type": "text",
+    "text": { "body": "Hi, following up on our RFQ for STM32F103C8T6." }
+  }'
+```
+
+```bash Template message
+curl -X POST http://localhost:3001/api/messages \
+  -H "Authorization: Bearer $WHATSAPP_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "to": "15551234567",
+    "type": "template",
+    "template": {
+      "name": "rfq_follow_up",
+      "language": { "code": "en_US" },
+      "components": [
+        {
+          "type": "body",
+          "parameters": [{ "type": "text", "text": "STM32F103C8T6" }]
+        }
+      ]
+    }
+  }'
+```
+
+</CodeGroup>
+
+## Errors
+
+All errors use the envelope described in the [overview](/api-reference/whatsapp/overview#error-envelope).
+
+| Status | Body | Meaning |
+| --- | --- | --- |
+| 400 | `{ "error": { "message": "Invalid message payload", "issues": [ … ] } }` | The body failed validation. `issues` lists each failed field. Also `400` for `Malformed JSON body`. |
+| 401 | `{ "error": { "message": "Unauthorized — …" } }` | Missing or incorrect API key. |
+| 409 | `{ "error": { "message": "A send with this Idempotency-Key is already in progress" } }` | The first send with this key has not finished yet. |
+| 413 | `{ "error": { "message": "Payload too large" } }` | The JSON body exceeds 1 MB. |
+| 503 | `{ "error": { "message": "WhatsApp channel is not configured" } }` | The `WHATSAPP_*` environment variables are not set. |
+| Meta status | `{ "error": { "message", "status", "code", "hint", … } }` | Graph API error passthrough with a `hint` for known codes. See the [overview](/api-reference/whatsapp/overview#graph-api-error-passthrough). |
+
+## Related
+
+- [WhatsApp Channel API Overview](/api-reference/whatsapp/overview)
+- [Message Lookup and Read Receipts](/api-reference/whatsapp/messages)
+- [Media](/api-reference/whatsapp/media)
+- [Templates](/api-reference/whatsapp/templates)
+- [Conversations](/api-reference/whatsapp/conversations)

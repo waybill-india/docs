@@ -1,0 +1,101 @@
+---
+title: "Phone Number Info and Registration"
+sidebarTitle: "Phone Number"
+description: "Inspect the sender number with GET /api/phone-number and register it on the Cloud API with POST /api/phone-number/register."
+---
+
+These endpoints manage the WhatsApp sender number configured in `WHATSAPP_PHONE_NUMBER_ID`. Use them to check the number's quality rating and to register it on the Cloud API before its first send.
+
+## Endpoints
+
+```http
+GET /api/phone-number
+POST /api/phone-number/register
+```
+
+## Authentication
+
+Send the API key as `Authorization: Bearer <WHATSAPP_API_KEY>` or in the `X-API-Key` header. Requests without a valid key return `401`. When the WhatsApp environment variables are unset, every route returns `503`. See the [WhatsApp channel overview](/api-reference/whatsapp/overview) for shared authentication and error behavior.
+
+## Get phone number info
+
+`GET /api/phone-number` returns Meta's record for the sender number. Check it to confirm the display name is verified and to monitor the quality rating, which Meta lowers when recipients block or report your messages.
+
+<ResponseField name="verified_name" type="string">
+  The business display name approved by Meta.
+</ResponseField>
+
+<ResponseField name="display_phone_number" type="string">
+  The number in international display format.
+</ResponseField>
+
+<ResponseField name="quality_rating" type="string">
+  Meta's messaging quality rating for the number, such as `GREEN`, `YELLOW`, or `RED`.
+</ResponseField>
+
+<ResponseField name="code_verification_status" type="string">
+  Status of the number's ownership verification.
+</ResponseField>
+
+<ResponseField name="platform_type" type="string">
+  The platform the number is registered on, such as `CLOUD_API`.
+</ResponseField>
+
+<ResponseField name="throughput" type="object">
+  The messaging throughput level Meta has assigned to the number.
+</ResponseField>
+
+## Register the phone number
+
+`POST /api/phone-number/register` registers the number on the Cloud API with a 6-digit two-step verification PIN. Registration is required before the number can send messages. If sends fail with Meta error code `133010`, the number is not registered and you should call this endpoint. The passthrough error includes a `hint` pointing you here.
+
+<ParamField body="pin" type="string" required>
+  The 6-digit two-step verification PIN for the number, for example `"000000"`.
+</ParamField>
+
+Returns `{ "success": true }`.
+
+## Example
+
+<CodeGroup>
+
+```bash Get number info
+curl http://localhost:3001/api/phone-number \
+  -H "Authorization: Bearer $WHATSAPP_API_KEY"
+```
+
+```bash Register the number
+curl -X POST http://localhost:3001/api/phone-number/register \
+  -H "Authorization: Bearer $WHATSAPP_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"pin": "000000"}'
+```
+
+</CodeGroup>
+
+```json GET response
+{
+  "verified_name": "Waybill Procurement",
+  "display_phone_number": "+1 555-123-4567",
+  "quality_rating": "GREEN",
+  "code_verification_status": "VERIFIED",
+  "platform_type": "CLOUD_API",
+  "throughput": { "level": "STANDARD" }
+}
+```
+
+## Errors
+
+| Status | Body | Meaning |
+| --- | --- | --- |
+| 400 | `{ "error": { "message": "Invalid payload", "issues": [ … ] } }` | `pin` is missing or not exactly 6 digits. |
+| 401 | `{ "error": { "message": "Unauthorized — provide the API key via \"Authorization: Bearer <key>\" or \"X-API-Key\"." } }` | Missing or invalid API key. |
+| 503 | `{ "error": { "message": "WhatsApp channel is not configured" } }` | The `WHATSAPP_*` environment variables are unset. |
+
+Graph API failures pass through with Meta's status code and a serialized error body. See the [overview](/api-reference/whatsapp/overview) for the full error envelope.
+
+## Related
+
+- [Send a Message](/api-reference/whatsapp/send-message)
+- [Webhook Setup](/api-reference/whatsapp/setup)
+- [Environment Variables](/configuration/environment)
