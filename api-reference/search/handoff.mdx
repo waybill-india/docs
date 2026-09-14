@@ -1,0 +1,68 @@
+---
+title: "Hand Off Web Candidates"
+sidebarTitle: "Handoff"
+description: "POST /search/:requestID/handoff starts the supervisor over email or WhatsApp against a user-chosen subset of the web supplier candidates."
+---
+
+Start the supervisor over email or WhatsApp against a user-chosen subset of the web candidates from [`GET /search/:requestID/web`](/api-reference/search/web). Nothing is auto-selected: this endpoint exists so a human confirms who receives real messages. Before the run starts, each selected candidate's `contactEmail` (for `email`) or `contactPhone` (for `whatsapp`) is registered as a supplier contact.
+
+Use this when `POST /search/:requestID` found no internal suppliers (or too few) and the Exa web search produced candidates worth contacting.
+
+## Endpoint
+
+```http
+POST /search/:requestID/handoff
+```
+
+## Request
+
+<ParamField body="supplierIDs" type="string[]" required>
+  `supplierID` values from the candidates returned by [`GET /search/:requestID/web`](/api-reference/search/web).
+</ParamField>
+
+<ParamField body="channel" type="string">
+  `email` (default) or `whatsapp`. Decides how the RFQ and negotiation agents reach the selected suppliers.
+</ParamField>
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST http://localhost:3001/search/299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21/handoff \
+  -H "Content-Type: application/json" \
+  -d '{"supplierIDs": ["299cb5b9-…-web-2"], "channel": "email"}'
+```
+
+</CodeGroup>
+
+## Response
+
+### 200 — Supervisor started
+
+```json
+{
+  "requestID": "299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21",
+  "supervisor": {
+    "status": "awaiting_supplier_responses",
+    "waitingFor": ["299cb5b9-…-web-2"]
+  }
+}
+```
+
+Then poll [`GET /supervisor/:requestID`](/api-reference/supervisor/get) exactly as after `POST /search/:requestID`.
+
+## Errors
+
+| Status | Body | Meaning |
+| --- | --- | --- |
+| 400 | `{ "errors": [ …validation issues… ] }` or `{ "error": "Unknown suppliers: …" }` | The body is malformed or a `supplierID` is not among this request's web candidates. |
+| 404 | `{ "error": "Request not found" }` or `{ "error": "No web search for this request" }` | The `requestID` does not exist, or no web search ran for it. |
+| 409 | `{ "error": "Intake is not resolved yet", "status": "…" }` | The intake stage is still asking clarifying questions. |
+| 409 | `{ "error": "Request was already handed off to the supervisor", "status": "…" }` | A supervisor run already exists for this request. |
+| 409 | `{ "error": "Supplier discovery is still running", "status": "running" }` | The web search has not completed. Keep polling [`GET /search/:requestID/web`](/api-reference/search/web). |
+| 422 | `{ "error": "No email address for: …" }` or `{ "error": "No phone number for: …" }` | A selected candidate lacks the contact detail the chosen channel needs. |
+
+## Related
+
+- [Get Web Search Candidates](/api-reference/search/web)
+- [Get Supervisor Run State](/api-reference/supervisor/get)
+- [Channels](/guides/channels)

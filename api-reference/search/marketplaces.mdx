@@ -1,0 +1,82 @@
+---
+title: "Get Marketplace Listings"
+sidebarTitle: "Marketplace Listings"
+description: "GET /search/:requestID/marketplaces returns product listings scraped from Amazon, Flipkart, IndiaMART, and Alibaba via parse.bot during the search stage."
+---
+
+Fetch product listings scraped from Amazon, Flipkart, IndiaMART, and Alibaba during [`POST /search/:requestID`](/api-reference/search/start). The scrape runs through parse.bot and requires `PARSEBOT_API_KEY` and `SUPPLIER_SIMULATOR=false`.
+
+**Do not poll this endpoint.** The marketplace search completes before the `POST /search/:requestID` response is sent, so a single fetch afterwards returns the final result. The response contains at most 5 listings per marketplace.
+
+## Endpoint
+
+```http
+GET /search/:requestID/marketplaces
+```
+
+## Request
+
+<CodeGroup>
+
+```bash cURL
+curl http://localhost:3001/search/299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21/marketplaces
+```
+
+</CodeGroup>
+
+## Response
+
+### 200 — Marketplace listings
+
+```json
+{
+  "requestID": "299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21",
+  "status": "completed",
+  "products": [
+    {
+      "marketplace": "indiamart",
+      "title": "STM32F103C8T6 ARM Cortex-M3 Microcontroller",
+      "price": "₹385",
+      "currency": "INR",
+      "productUrl": "https://www.indiamart.com/proddetail/…",
+      "imageUrl": "https://5.imimg.com/…",
+      "rating": 4.3,
+      "supplierName": "Sharma Electro Components Pvt Ltd",
+      "minOrderQuantity": "100 Piece",
+      "location": "Delhi, India"
+    }
+  ],
+  "errors": [
+    {
+      "marketplace": "alibaba",
+      "error": "parse.bot alibaba search_products failed with status 429: …"
+    }
+  ]
+}
+```
+
+<ResponseField name="status" type="string">
+  `completed` when at least one marketplace returned listings. `failed` only when every marketplace errored.
+</ResponseField>
+
+<ResponseField name="products" type="array">
+  Up to 5 listings per marketplace. Any field a scraper did not return is `null`.
+</ResponseField>
+
+<ResponseField name="errors" type="array">
+  Marketplaces that could not be reached, so you can label a partial result honestly.
+</ResponseField>
+
+Like the Exa web candidates, these listings are **not** part of the supervisor or RFQ flow. They are an independent outreach list you can present alongside internal supplier results.
+
+## Errors
+
+| Status | Body | Meaning |
+| --- | --- | --- |
+| 404 | `{ "error": "No marketplace search for this request" }` | No marketplace search ran for this request. Check that `marketplaceSearched` was `true` in the [`POST /search/:requestID`](/api-reference/search/start) response. |
+
+## Related
+
+- [Start Supplier Search](/api-reference/search/start)
+- [Get Distributor Offers](/api-reference/search/distributors)
+- [Search Concepts](/concepts/search)

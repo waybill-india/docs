@@ -30,6 +30,10 @@ POST /supervisor
   The structured part spec produced by intake. See [Resolved Query](/concepts/resolved-query).
 </ParamField>
 
+<ParamField body="channel" type="string" default="simulator">
+  How the RFQ and negotiation agents reach every supplier in the run: `email`, `whatsapp`, `simulator`, `voice`, or `sms`. Any channel other than `simulator` needs a registered supplier contact per supplier. See [Channels](/guides/channels).
+</ParamField>
+
 ## Example
 
 <CodeGroup>

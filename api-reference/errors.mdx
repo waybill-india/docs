@@ -54,12 +54,12 @@ A special 409 is returned when the pending question changed since the answer was
 
 ### Unprocessable entity (422)
 
-Returned by `POST /search/:requestID` when no plausible suppliers were found and the web search leg is unavailable.
+Returned by `POST /search/:requestID` when no internal suppliers matched and no open-web leg (Exa, marketplace, or distributor search) produced anything, because all legs were unconfigured or all failed.
 
 ```json
 {
   "requestID": "299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21",
-  "error": "No plausible suppliers found for this part — not producing a handoff payload"
+  "error": "No plausible suppliers found for this part"
 }
 ```
 
@@ -105,7 +105,7 @@ Returned by `POST /webhook/vapi` when `VAPI_WEBHOOK_SECRET` is not configured.
 | `POST /search/:requestID` | 404 | `requestID` does not exist |
 | `POST /search/:requestID` | 409 | Intake is not resolved yet |
 | `POST /search/:requestID` | 409 | Request was already handed off to the supervisor |
-| `POST /search/:requestID` | 422 | No plausible suppliers found and web search is unavailable |
+| `POST /search/:requestID` | 422 | No plausible suppliers found and no open-web leg produced results |
 | `GET /search/:requestID/web` | 404 | No web search run exists for this request |
 | `GET /search/:requestID/web` | 502 | Exa provider error; keep polling |
 | `GET /supervisor/:requestID` | 404 | `requestID` does not exist |
