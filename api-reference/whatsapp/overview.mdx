@@ -44,6 +44,15 @@ The channel is enabled only when all seven WhatsApp environment variables are se
 
 Two optional variables tune the upstream Graph API: `GRAPH_API_BASE_URL` (default `https://graph.facebook.com`) and `GRAPH_API_VERSION` (default `v26.0`). See [Environment Variables](/configuration/environment) for the full list.
 
+### Delivery safety
+
+Two variables control whether agent-driven RFQ sends reach real suppliers:
+
+- `WHATSAPP_LIVE_DELIVERY` (default `false`). While `false`, every WhatsApp message the procurement agent sends is redirected to `WHATSAPP_TEST_NUMBER` instead of the supplier, and the message body is prefixed with `[test: <supplierID>]` so you can tell which supplier it was meant for. Set it to `true` only when you mean to message actual suppliers.
+- `WHATSAPP_TEST_NUMBER`. The number that receives redirected test sends, in international format such as `+919999999999`. Required while `WHATSAPP_LIVE_DELIVERY` is `false`: the channel fails to start without it.
+
+This redirect applies only to the agent's send path. Messages you send directly through `POST /api/messages` always go to the `to` recipient you specify.
+
 ## Error envelope
 
 Every error on `/api/*` uses the same shape:

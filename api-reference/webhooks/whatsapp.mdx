@@ -41,13 +41,17 @@ Otherwise it returns `403 Forbidden`.
 
 Meta posts inbound messages and delivery statuses to this endpoint. Requests are authenticated by the `x-hub-signature-256` header: an HMAC-SHA256 hex digest of the raw request body keyed by `WHATSAPP_APP_SECRET`, prefixed with `sha256=`. Requests with a missing or invalid signature are rejected with 401.
 
-Every event is persisted to the WhatsApp message store. Inbound text messages are then matched to a request/supplier pair through channel threads on the sender's WhatsApp ID. When several requests share the same sender, the most recently created request wins. A match resumes the supervisor run with the supplier's reply.
+Events are processed only when they belong to the configured WhatsApp Business Account and phone number. Entries for a different `WHATSAPP_BUSINESS_ACCOUNT_ID` or `WHATSAPP_PHONE_NUMBER_ID` are accepted with 200 and ignored.
+
+Every event is persisted to the WhatsApp message store. Inbound text messages are then matched to a request/supplier pair. A quoted reply resolves exactly: the quoted message ID identifies its thread. Any other message falls back to a lookup on the sender's WhatsApp ID. When several threads share the same sender, the most recently messaged thread wins. A match resumes the supervisor run with the supplier's reply.
+
+Suppliers can quote the specific RFQ they are replying to, so encourage reply-quoting when one supplier handles several of your requests.
 
 Non-text messages, delivery statuses, messages from unmapped senders, and redeliveries of an already-recorded message are accepted with 200 and deliberately ignored.
 
 ## Redelivery semantics
 
-Meta delivers events at-least-once and retries failed deliveries with backoff. The handler is idempotent per message: dedupe on the thread's last recorded message ID keeps a redelivered message from resuming the run twice. A 500 response tells Meta to redeliver, so transient persistence or dispatch failures heal on retry.
+Meta delivers events at-least-once and retries failed deliveries with backoff. The handler is idempotent per message: dedupe on the thread's last recorded message ID keeps a redelivered message from resuming the run twice. A 500 response tells Meta to redeliver, so transient persistence or dispatch failures heal on retry. When agent dispatch fails, the handler rolls the dedupe marker back so the redelivered message is processed rather than skipped.
 
 ## Example
 
@@ -73,6 +77,7 @@ A minimal inbound text event as Meta posts it:
         {
           "field": "messages",
           "value": {
+            "metadata": { "phone_number_id": "106540352242922" },
             "messages": [
               {
                 "id": "wamid.HBgLMTU1NTEyMzQ1NjcVAgARGBI5QTNDQTVCM0Q0Q0Q2RTY3RTcA",
@@ -94,7 +99,7 @@ A minimal inbound text event as Meta posts it:
 
 | Status | Body | Meaning |
 | --- | --- | --- |
-| 200 | `OK` | Event processed, including deliberately ignored events: statuses, non-text messages, unmapped senders, and redeliveries. |
+| 200 | `OK` | Event processed, including deliberately ignored events: statuses, non-text messages, unmapped senders, events for another business account or phone number, and redeliveries. |
 | 400 | `Malformed JSON` | The request body was not valid JSON. |
 | 401 | `Invalid signature` | The `x-hub-signature-256` header was missing or did not match. |
 | 500 | `Processing failed` | Persistence or agent dispatch failed. Meta redelivers with backoff, and message-ID dedupe prevents double-resuming the run. |
