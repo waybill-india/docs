@@ -46,6 +46,17 @@ waybill-arc exposes a stateful, poll-based API that you can drive from any front
     - If `distributorsSearched` is `true`, distributor offers are already stored. Fetch `GET /search/:requestID/distributors` once. No polling is needed.
     - If `supervisor` is `null`, no internal suppliers matched and the open-web legs are the only ones in flight.
   </Step>
+  <Step title="Hand off web candidates (optional)">
+    Once the web search reports `completed`, let the user tick the candidates worth contacting and send their `supplierID`s to `POST /search/:requestID/handoff` with an optional `channel` (`email` by default, or `whatsapp`). Never select on the user's behalf: these are real messages to real suppliers.
+
+    ```bash
+    curl -X POST http://localhost:3001/search/299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21/handoff \
+      -H "Content-Type: application/json" \
+      -d '{"supplierIDs": ["299cb5b9-…-web-2"], "channel": "email"}'
+    ```
+
+    The supervisor starts against the selected candidates. Poll it as in the next step.
+  </Step>
   <Step title="Poll the supervisor">
     Poll `GET /supervisor/:requestID` every 5–10 seconds until `status` is `completed`.
 

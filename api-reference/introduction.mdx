@@ -36,6 +36,7 @@ Show loading states and poll `GET /supervisor/:requestID` every 5–10 seconds a
 | GET | `/intake/:requestID` | Current intake state |
 | POST | `/search/:requestID` | Select suppliers, send RFQs, and start web search |
 | GET | `/search/:requestID/web` | Poll web supplier candidates |
+| POST | `/search/:requestID/handoff` | Start the supervisor over email or WhatsApp for chosen web candidates |
 | GET | `/search/:requestID/marketplaces` | Marketplace product listings |
 | GET | `/search/:requestID/distributors` | Distributor (DigiKey/Mouser) offers |
 | GET | `/supervisor/:requestID` | Poll procurement run state |

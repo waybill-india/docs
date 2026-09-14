@@ -63,6 +63,10 @@ When the Exa search completes, candidates have one of two `kind` values:
 
 Any unverified field may be `null`. Web candidates, marketplace listings, and distributor offers are **not** part of the supervisor or RFQ flow. They are independent outreach lists you can present to the user alongside the internal supplier results.
 
+## Handing off web candidates
+
+After the Exa search completes, the user can pick candidates worth contacting and start the supervisor against them with [`POST /search/:requestID/handoff`](/api-reference/search/handoff). Each candidate carries a `supplierID` that is stable for the request. The handoff sends RFQs over `email` (default) or `whatsapp`, using the candidate's `contactEmail` or `contactPhone`. Nothing is auto-selected: a human confirms who receives real messages.
+
 ## Example web candidate
 
 ```json
@@ -85,6 +89,7 @@ Any unverified field may be `null`. Web candidates, marketplace listings, and di
 
 - [Start search](/api-reference/search/start)
 - [Web search results](/api-reference/search/web)
+- [Hand off web candidates](/api-reference/search/handoff)
 - [Marketplace listings](/api-reference/search/marketplaces)
 - [Distributor offers](/api-reference/search/distributors)
 - [Supervisor](/concepts/supervisor)

@@ -53,8 +53,19 @@ Each key enables one open-web leg of `POST /search`. All legs require `SUPPLIER_
 | --- | --- | --- |
 | `AGENTMAIL_API_KEY` | — | Required to use the email channel |
 | `AGENTMAIL_WEBHOOK_SECRET` | — | Svix signing secret for `POST /webhook/email` |
-| `AGENTMAIL_INBOX_ID` | — | Use an existing inbox instead of creating one |
+| `AGENTMAIL_INBOX_ID` | — | Use an existing inbox instead of creating one. Set this to a fixed address; without it a new inbox is created on each cold boot and supplier replies land somewhere nobody is watching |
 | `AGENTMAIL_INBOX_USERNAME` | `procurement` | Username for the shared inbox created on first use |
+| `EMAIL_LIVE_DELIVERY` | `false` | `false` routes every RFQ to `EMAIL_TEST_ADDRESS` instead of the supplier, so a run can be exercised end to end without contacting anyone real. Flip to `true` only when you mean to email actual suppliers |
+| `EMAIL_TEST_ADDRESS` | — | Address that receives all RFQs while `EMAIL_LIVE_DELIVERY` is `false`. Required in that mode when `AGENTMAIL_API_KEY` is set |
+
+## WhatsApp channel
+
+The WhatsApp channel activates when the `WHATSAPP_*` Cloud API variables are set. Two variables guard live delivery:
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `WHATSAPP_LIVE_DELIVERY` | `false` | `false` routes every RFQ to `WHATSAPP_TEST_NUMBER` instead of the supplier. Flip to `true` only when you mean to message actual suppliers |
+| `WHATSAPP_TEST_NUMBER` | — | Number that receives all RFQs while `WHATSAPP_LIVE_DELIVERY` is `false`. Required in that mode when the WhatsApp channel is configured |
 
 ## Voice/SMS channel (Vapi)
 
@@ -98,8 +109,14 @@ MOUSER_API_KEY=...
 # Email channel (optional)
 AGENTMAIL_API_KEY=am-...
 AGENTMAIL_WEBHOOK_SECRET=whsec_...
-AGENTMAIL_INBOX_ID=inbox_...
+AGENTMAIL_INBOX_ID=procurement@agentmail.to
 AGENTMAIL_INBOX_USERNAME=procurement
+EMAIL_LIVE_DELIVERY=false
+EMAIL_TEST_ADDRESS=you@example.com
+
+# WhatsApp channel delivery guard (optional)
+WHATSAPP_LIVE_DELIVERY=false
+WHATSAPP_TEST_NUMBER=+919999999999
 
 # Voice/SMS channel (optional)
 VAPI_API_KEY=vapi-...

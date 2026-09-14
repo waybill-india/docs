@@ -4,7 +4,7 @@ sidebarTitle: "Web Candidates"
 description: "GET /search/:requestID/web polls the parallel Exa web search for open-web supplier candidates. Results include marketplace listings and quotation-based suppliers."
 ---
 
-Poll the Exa web search run started by [`POST /search/:requestID`](/api-reference/search/start) to discover open-web suppliers. Runs take seconds to minutes and are capped at one hour. Terminal statuses are `completed`, `failed`, and `cancelled`. These candidates are an independent outreach list, not part of the supervisor RFQ flow.
+Poll the Exa web search run started by [`POST /search/:requestID`](/api-reference/search/start) to discover open-web suppliers. Runs take seconds to minutes and are capped at one hour. Terminal statuses are `completed`, `failed`, and `cancelled`. These candidates are an independent outreach list, not part of the supervisor RFQ flow, until you hand a chosen subset to the supervisor with [`POST /search/:requestID/handoff`](/api-reference/search/handoff).
 
 ## Endpoint
 
@@ -32,6 +32,7 @@ curl http://localhost:3001/search/299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21/web
   "status": "queued | running | completed | failed | cancelled",
   "candidates": [
     {
+      "supplierID": "299cb5b9-…-web-1",
       "kind": "marketplace_listing",
       "productUrl": "https://www.indiamart.com/proddetail/…",
       "price": "₹385 / piece",
@@ -43,6 +44,7 @@ curl http://localhost:3001/search/299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21/web
       "sources": [{ "url": "https://www.indiamart.com/…", "title": "…" }]
     },
     {
+      "supplierID": "299cb5b9-…-web-2",
       "kind": "quotation_supplier",
       "productUrl": null,
       "price": null,
@@ -64,7 +66,11 @@ curl http://localhost:3001/search/299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21/web
 </ResponseField>
 
 <ResponseField name="candidates" type="array">
-  Empty until `status` is `completed`. Each entry has a `kind`, supplier details, and `sources`.
+  Empty until `status` is `completed`. Each entry has a `supplierID`, a `kind`, supplier details, and `sources`.
+</ResponseField>
+
+<ResponseField name="supplierID" type="string">
+  Stable for the request. Pass the chosen candidates' IDs to [`POST /search/:requestID/handoff`](/api-reference/search/handoff) to contact them over email or WhatsApp.
 </ResponseField>
 
 <ResponseField name="kind" type="string">
@@ -97,4 +103,5 @@ Poll every 5–10 seconds. Do not stop polling on `502`; retry until you hit a t
 ## Related
 
 - [Start Supplier Search](/api-reference/search/start)
+- [Hand Off Web Candidates](/api-reference/search/handoff)
 - [Search Concepts](/concepts/search)
