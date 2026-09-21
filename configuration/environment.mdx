@@ -6,6 +6,14 @@ description: "Configure waybill-arc with environment variables for LLMs, Postgre
 
 waybill-arc reads its configuration from a `.env` file in the repo root, validated by `src/config.ts`. Set the required keys for LLM calls and database connectivity, then add optional variables to tune agent behavior, enable channels, or wire observability.
 
+<Note>
+  Blank values in `.env` are stripped before schema validation. Leaving an optional key empty means "feature disabled" — it will not fail startup or override a default. To turn a feature off, leave its key blank rather than removing it.
+</Note>
+
+<Note>
+  The bundled `.env.example` groups keys into five sections: **REQUIRED**, **LOCAL TESTING**, **EMAIL**, **WHATSAPP**, and **OPTIONAL**. `SUPPLIER_SIMULATOR` defaults to `false` in the example so a fresh copy talks to real discovery unless you opt into the simulator.
+</Note>
+
 ## Required
 
 | Variable | Description |
@@ -20,6 +28,29 @@ waybill-arc reads its configuration from a `.env` file in the repo root, validat
 | --- | --- | --- |
 | `CONFIDENCE_THRESHOLD` | `0.9` | Minimum confidence before intake resolves a query |
 | `MAX_TOOL_ITERATIONS` | `15` | Cap on agent tool-call loops |
+
+## Local testing
+
+Use these variables to run the pipeline end-to-end without contacting real suppliers.
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `SUPPLIER_SIMULATOR` | `false` | When `true`, the search agent picks from the built-in simulator supplier list and skips all real discovery |
+| `TEST_SUPPLIERS` | — | JSON array of `{ id, channel: 'email' \| 'whatsapp', address }` entries. Replaces the discovered supplier set with these fixed contacts |
+
+### `TEST_SUPPLIERS`
+
+`TEST_SUPPLIERS` short-circuits discovery so RFQs go to a known set of test recipients. When it is set:
+
+- The search agent returns your test suppliers directly instead of running Exa, marketplace, or distributor searches.
+- The search agent still writes an empty row to `web_search_runs` so `POST /search/:requestID/handoff` can proceed for test suppliers while web discovery would otherwise still be `running`.
+- `EMAIL_TEST_ADDRESS` / `EMAIL_TEST_ADDRESSES` and `WHATSAPP_TEST_NUMBER` become optional. Deliveries are addressed to the `address` field on each test supplier instead.
+
+Each entry must include a unique `id` (1–128 chars), a `channel` of `email` or `whatsapp`, and an `address` matching that channel (RFC email or E.164-style phone number).
+
+```sh
+TEST_SUPPLIERS=[{"id":"test-email-1","channel":"email","address":"first@example.com"},{"id":"test-email-2","channel":"email","address":"second@example.com"},{"id":"test-whatsapp","channel":"whatsapp","address":"+911234567890"}]
+```
 
 ## Tracing (Langfuse)
 
@@ -43,6 +74,37 @@ waybill-arc reads its configuration from a `.env` file in the repo root, validat
 | `AGENTMAIL_WEBHOOK_SECRET` | — | Svix signing secret for `POST /webhook/email` |
 | `AGENTMAIL_INBOX_ID` | — | Use an existing inbox instead of creating one |
 | `AGENTMAIL_INBOX_USERNAME` | `procurement` | Username for the shared inbox created on first use |
+| `EMAIL_LIVE_DELIVERY` | `false` | When `false`, every outbound RFQ is redirected to the test recipients instead of the real supplier |
+| `EMAIL_TEST_ADDRESS` | — | Single test recipient used while `EMAIL_LIVE_DELIVERY=false` |
+| `EMAIL_TEST_ADDRESSES` | — | Comma-separated list of test recipients. All listed addresses receive the redirected RFQ |
+
+`EMAIL_TEST_ADDRESSES` is a sibling of `EMAIL_TEST_ADDRESS` for the common case of routing test RFQs to several inboxes at once. If both are set, `EMAIL_TEST_ADDRESSES` wins. One of `EMAIL_TEST_ADDRESS`, `EMAIL_TEST_ADDRESSES`, or `TEST_SUPPLIERS` is required whenever `AGENTMAIL_API_KEY` is set and `EMAIL_LIVE_DELIVERY=false`.
+
+```sh
+EMAIL_TEST_ADDRESSES=first@example.com,second@example.com
+```
+
+## WhatsApp channel (Meta Cloud API)
+
+The WhatsApp block is all-or-nothing: leave every key blank to disable the channel, or set the full set to enable it.
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `WHATSAPP_ACCESS_TOKEN` | — | Meta Cloud API access token |
+| `WHATSAPP_PHONE_NUMBER_ID` | — | Sender phone number ID |
+| `WHATSAPP_BUSINESS_ACCOUNT_ID` | — | WhatsApp Business Account ID |
+| `WHATSAPP_APP_SECRET` | — | App secret used to verify inbound webhook signatures |
+| `WHATSAPP_WEBHOOK_VERIFY_TOKEN` | — | Verify token for the Meta webhook handshake (min 8 chars) |
+| `WHATSAPP_API_KEY` | — | Bearer token guarding `/whatsapp/*` routes (min 16 chars) |
+| `WHATSAPP_DATABASE_URL` | — | Pooled Postgres URL for the WhatsApp message store |
+| `WHATSAPP_DIRECT_URL` | — | Direct Postgres URL used only by `npm run db:deploy` |
+| `WHATSAPP_LIVE_DELIVERY` | `false` | When `false`, every outbound WhatsApp message is redirected to `WHATSAPP_TEST_NUMBER` |
+| `WHATSAPP_TEST_NUMBER` | — | Test recipient used while `WHATSAPP_LIVE_DELIVERY=false` (E.164, e.g. `+911234567890`) |
+| `WHATSAPP_ENQUIRY_TEMPLATE` | `waybill_enquiry` | Name of the approved template used for the first outbound RFQ |
+| `WHATSAPP_FOLLOWUP_TEMPLATE` | `waybill_followup` | Name of the approved template used for follow-up messages |
+| `WHATSAPP_TEMPLATE_LANGUAGE` | `en` | Language code of the approved templates |
+
+`WHATSAPP_TEST_NUMBER` is required whenever WhatsApp is configured and `WHATSAPP_LIVE_DELIVERY=false`, unless `TEST_SUPPLIERS` covers it. Override the template names and language to match the exact templates you have approved in the Meta Business Manager.
 
 ## Voice/SMS channel (Vapi)
 
@@ -66,6 +128,10 @@ SUPPLIER_API_URL=https://your-supplier-sim.example.com
 CONFIDENCE_THRESHOLD=0.9
 MAX_TOOL_ITERATIONS=15
 
+# Local testing (optional)
+SUPPLIER_SIMULATOR=false
+TEST_SUPPLIERS=[{"id":"test-email","channel":"email","address":"you@example.com"}]
+
 # Tracing (optional)
 LANGFUSE_PUBLIC_KEY=pk-...
 LANGFUSE_SECRET_KEY=sk-...
@@ -79,6 +145,23 @@ AGENTMAIL_API_KEY=am-...
 AGENTMAIL_WEBHOOK_SECRET=whsec_...
 AGENTMAIL_INBOX_ID=inbox_...
 AGENTMAIL_INBOX_USERNAME=procurement
+EMAIL_LIVE_DELIVERY=false
+EMAIL_TEST_ADDRESSES=first@example.com,second@example.com
+
+# WhatsApp channel (optional)
+WHATSAPP_ACCESS_TOKEN=...
+WHATSAPP_PHONE_NUMBER_ID=...
+WHATSAPP_BUSINESS_ACCOUNT_ID=...
+WHATSAPP_APP_SECRET=...
+WHATSAPP_WEBHOOK_VERIFY_TOKEN=...
+WHATSAPP_API_KEY=...
+WHATSAPP_DATABASE_URL=postgres://user:pass@host:5432/whatsapp
+WHATSAPP_DIRECT_URL=postgres://user:pass@host:5432/whatsapp
+WHATSAPP_LIVE_DELIVERY=false
+WHATSAPP_TEST_NUMBER=+911234567890
+WHATSAPP_ENQUIRY_TEMPLATE=waybill_enquiry
+WHATSAPP_FOLLOWUP_TEMPLATE=waybill_followup
+WHATSAPP_TEMPLATE_LANGUAGE=en
 
 # Voice/SMS channel (optional)
 VAPI_API_KEY=vapi-...
