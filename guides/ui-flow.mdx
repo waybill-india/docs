@@ -40,9 +40,25 @@ waybill-arc exposes a stateful, poll-based API that you can drive from any front
     curl -X POST http://localhost:3001/search/299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21
     ```
 
-    - If `supervisor` is non-null, the supervisor has sent RFQs and is `awaiting_supplier_responses`.
-    - If `webSearch` is present, start polling `GET /search/:requestID/web` for open-web supplier candidates.
-    - If `supervisor` is `null`, no internal suppliers matched and the web search is the only leg in flight.
+    - If `supervisor` is non-null, the supervisor has sent RFQs to the internal suppliers and is `awaiting_supplier_responses`.
+    - If a parallel web search started, start polling `GET /search/:requestID/web` for open-web supplier candidates.
+    - If `supervisor` is `null`, no internal suppliers matched and only the web search leg is in flight.
+  </Step>
+  <Step title="Hand off web candidates (optional)">
+    To turn selected web candidates into a supervisor run, let the user pick candidates and a channel per candidate, then call [`POST /search/:requestID/handoff`](/api-reference/search/handoff).
+
+    ```bash
+    curl -X POST http://localhost:3001/search/299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21/handoff \
+      -H "Content-Type: application/json" \
+      -d '{
+        "suppliers": [
+          { "supplierID": "SUP-webA", "channel": "email" },
+          { "supplierID": "SUP-webB", "channel": "whatsapp" }
+        ]
+      }'
+    ```
+
+    Pass an optional `workflowPolicy` (`sendRfqs`, `runQualification`, `normalizeQuotes`, `negotiate`, `recommendAward` — all default `true`) to skip stages. If any assigned supplier is unreachable on the requested channel, the response is `422` with `Missing contact for: …`.
   </Step>
   <Step title="Poll the supervisor">
     Poll `GET /supervisor/:requestID` every 5–10 seconds until `status` is `completed`.
@@ -59,10 +75,10 @@ waybill-arc exposes a stateful, poll-based API that you can drive from any front
     - `quotes` messages contain per-supplier pricing, stock, and terms.
     - `qualification_verdicts` messages contain `approved`, `excluded`, or `review` dispositions.
 
-    See [Structured Messages](/concepts/structured-messages) for the exact JSON shapes.
+    Also render the four **terminal supplier markers** — `supplier_declined`, `supplier_withdrawn`, `supplier_failed`, and `supplier_no_reply` — as "declined", "withdrawn", "failed", and "no reply". Cross-reference the top-level `errors[]` array to show the operator message for a failed supplier. See [Structured Messages](/concepts/structured-messages) and [Rendering Results](/guides/rendering-results) for the exact JSON shapes.
   </Step>
   <Step title="Show the final recommendation">
-    The last `messages` entry with `name: "negotiation"` is a markdown award recommendation. Render it with a markdown renderer. The full `messages` array serves as a timeline.
+    The last `messages` entry with `name: "award_recommendation"` is the coordinator's markdown award recommendation, appended once every supplier's child thread finishes. Render it with a markdown renderer. The full `messages` array serves as a timeline.
   </Step>
 </Steps>
 
@@ -74,7 +90,7 @@ Map the flow above to these UI views:
 - **Clarification chat** — a Q&A loop while `awaiting_answer`; options as chips plus a free-text input.
 - **Review spec** — render `resolvedQuery` (part name, specs table, quantity, sources) with a "Find suppliers" button.
 - **Supplier discovery** — show `request.selections` with the reasoning for each contacted supplier.
-- **Run progress** — poll `GET /supervisor/:requestID`; display `waitingFor` badges, the `quotes` comparison, and the `messages` timeline.
-- **Result** — the final `negotiation` message as the recommendation, with the timeline available for review.
+- **Run progress** — poll `GET /supervisor/:requestID`; display `waitingFor` badges, the `quotes` comparison, per-supplier terminal markers (declined / withdrawn / failed / no reply), any `errors[]`, and the `messages` timeline.
+- **Result** — the final `award_recommendation` message as the recommendation, with the timeline available for review.
 
 For details on how to parse and render the supervisor output, see [Rendering Results](/guides/rendering-results).

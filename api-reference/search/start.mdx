@@ -77,8 +77,13 @@ When no internal suppliers match but the web search leg is enabled, `supervisor`
 - After a **no-internal-suppliers 200**, a retry is allowed and reuses the same web search run.
 - `webSearch` is only present when the Exa leg is enabled and its run started successfully.
 
+## Handing off web-discovered suppliers
+
+`POST /search/:requestID` only starts a supervisor run for **internal** suppliers. To turn web candidates from [`GET /search/:requestID/web`](/api-reference/search/web) into a supervisor run, call [`POST /search/:requestID/handoff`](/api-reference/search/handoff). That endpoint lets you assign a channel per supplier and skip specific workflow stages (RFQ, qualification, quote normalization, negotiation, award recommendation).
+
 ## Related
 
+- [Handoff Web Suppliers to the Supervisor](/api-reference/search/handoff)
 - [Get Web Search Candidates](/api-reference/search/web)
 - [Get Supervisor Run State](/api-reference/supervisor/get)
 - [Search Concepts](/concepts/search)
