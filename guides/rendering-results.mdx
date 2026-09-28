@@ -48,11 +48,46 @@ Render verdicts as badges or filters:
 
 When the supervisor is paused for supplier replies, `interrupts` contains a `waitingFor` array of supplier IDs. Poll `GET /supervisor/:requestID` every 5–10 seconds until the status changes.
 
+## Terminal supplier markers
+
+Each supplier's workflow can end with one of several terminal markers in the merged `messages` timeline. Render every marker — dropping them silently hides why a supplier is missing from the award.
+
+| Name | Render as | When it appears |
+| --- | --- | --- |
+| `supplier_declined` | "Declined" | The supplier refused the RFQ. |
+| `supplier_withdrawn` | "Withdrawn" | The supplier pulled out mid-negotiation. |
+| `supplier_failed` | "Failed" | The supplier's child workflow crashed. Cross-reference the top-level `errors[]` entry for the same `supplierID` to show the operator message. |
+| `supplier_no_reply` | "No reply" | The supplier did not respond in time. |
+| `buyer_dropped` | "Dropped by buyer" | The buyer removed this supplier via [`drop_supplier`](/api-reference/requests/actions#drop_supplier). |
+| `request_ended` | "Request ended" | The request was cancelled, awarded, or closed while this supplier's thread was still open. |
+| `qualification_unresolved` | "Qualification unresolved" | The buyer did not break a `review` tie before the request ended. |
+
+Suppliers marked declined, withdrawn, failed, no-reply, dropped, or ended are excluded from award; so is an `excluded` qualification verdict. Suppliers with a `review` verdict are not terminal — the supervisor sends one `qualification_followup` message and re-assesses. If the second verdict is still `review`, the thread waits for the buyer's [`qualify_supplier`](/api-reference/requests/actions#qualify_supplier) decision; surface that as an "awaiting buyer" state and link the buyer to their decision screen.
+
+## Per-supplier errors
+
+Alongside the timeline, `errors[]` on the response lists any crashed child workflows:
+
+```json
+[
+  {
+    "supplierID": "SUP-00187",
+    "message": "Supplier workflow failed. Check the Arc server logs and retry the workflow."
+  }
+]
+```
+
+The coordinator still awards over the remaining suppliers, so treat this as an in-band per-supplier failure list, not a top-level run error.
+
 ## The final recommendation
 
-When `status` is `completed`, the last `messages` entry with `name: "negotiation"` is a markdown negotiation summary. It includes per-supplier outcomes and an award recommendation. Render it with a markdown renderer so headings, lists, and tables display correctly.
+When `status` is `completed`, the last `messages` entry with `name: "award_recommendation"` is the coordinator's markdown award summary. It compares every completed supplier workflow and either names a single winner (only ever from the `approved` suppliers) or explicitly recommends no award. Render it with a markdown renderer so headings, lists, and tables display correctly.
 
 The full `messages` array works as a timeline of the entire run.
+
+## Web-discovered results
+
+Candidates returned by [`GET /search/:requestID/web`](/api-reference/search/web) now always land as `marketplace_listing` when a product page and price are visible; there is no separate distributor category. To turn selected candidates into a supervisor run, call [`POST /search/:requestID/handoff`](/api-reference/search/handoff) with either the mixed-channel `{ suppliers: [{ supplierID, channel }] }` payload or the legacy `{ supplierIDs, channel }` payload.
 
 ## TypeScript snippet
 

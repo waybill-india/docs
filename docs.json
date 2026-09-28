@@ -36,6 +36,7 @@
               "concepts/intake",
               "concepts/search",
               "concepts/supervisor",
+              "concepts/buyer-decisions",
               "concepts/resolved-query",
               "concepts/structured-messages"
             ]
@@ -81,7 +82,8 @@
             "group": "Search",
             "pages": [
               "api-reference/search/start",
-              "api-reference/search/web"
+              "api-reference/search/web",
+              "api-reference/search/handoff"
             ]
           },
           {
@@ -89,6 +91,15 @@
             "pages": [
               "api-reference/supervisor/get",
               "api-reference/supervisor/start"
+            ]
+          },
+          {
+            "group": "Buyer Decisions",
+            "pages": [
+              "api-reference/requests/decision",
+              "api-reference/requests/actions",
+              "api-reference/requests/chat",
+              "api-reference/requests/cancel"
             ]
           },
           {

@@ -1,0 +1,110 @@
+---
+title: "Buyer Chat"
+sidebarTitle: "Chat"
+description: "GET /requests/:requestID/chat returns the buyer chat transcript. POST /requests/:requestID/chat sends the buyer's next message; the assistant may re-rank offers or start a renegotiation round on the buyer's behalf."
+---
+
+An assistant that helps the buyer decide. It reads the [decision package](/api-reference/requests/decision) — offers, gaps, supervisor recommendation, evidence — on every turn, answers questions grounded in that data, and can act on the buyer's behalf in two limited ways:
+
+- Update the mandate's `preferences` list (which re-ranks offers).
+- Start one more negotiation round with a specific supplier.
+
+The assistant cannot accept an offer, drop a supplier, close, or cancel. Those go through [`POST /requests/:requestID/actions`](/api-reference/requests/actions).
+
+## Read the transcript
+
+```http
+GET /requests/:requestID/chat
+```
+
+<CodeGroup>
+
+```bash cURL
+curl http://localhost:3001/requests/299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21/chat
+```
+
+</CodeGroup>
+
+### 200 — Chat history
+
+```json
+{
+  "messages": [
+    {
+      "role": "buyer",
+      "content": "Which offer is cheapest overall?",
+      "created_at": "2026-09-27T09:11:04.221Z"
+    },
+    {
+      "role": "assistant",
+      "content": "SUP-00142 at $3,740 total is the cheapest approved offer…",
+      "created_at": "2026-09-27T09:11:06.940Z"
+    }
+  ]
+}
+```
+
+Messages are ordered oldest-first.
+
+## Send a message
+
+```http
+POST /requests/:requestID/chat
+```
+
+### Request body
+
+<ParamField body="message" type="string" required>
+  The buyer's next message (1–4000 characters).
+</ParamField>
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST http://localhost:3001/requests/299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Actually, prioritize the shortest lead time even if it costs a bit more."}'
+```
+
+</CodeGroup>
+
+### 200 — Assistant reply plus refreshed decision
+
+```json
+{
+  "reply": "Updated preferences to prioritize lead time. SUP-00142 (6 weeks) now ranks first…",
+  "decision": {
+    "requestID": "299cb5b9-…",
+    "status": "open",
+    "mandate": { "version": 4, "preferences": ["Prefer shortest lead time"] },
+    "options": [ … re-ranked … ],
+    "recommendation": { … updated … },
+    "costUSD": 0.44
+  }
+}
+```
+
+The refreshed `decision` matches the shape of [`GET /requests/:requestID/decision`](/api-reference/requests/decision). Re-render the decision screen from it directly.
+
+## What the assistant can do
+
+The assistant runs a small tool loop. Both tools require the buyer's own words asking for the change; the assistant will refuse to run them from paraphrase or from anything a supplier claimed in evidence.
+
+- **Update preferences** — replaces the mandate's `preferences` list. Same effect as the `set_preferences` buyer action.
+- **Renegotiate with one supplier** — records a buyer note and triggers one more negotiation round with that supplier. Same effect as the `renegotiate` buyer action.
+
+For every other outcome (accept, drop, close, cancel, qualify a review supplier, extend a deadline), the assistant tells the buyer to use the corresponding button, which maps to [`POST /requests/:requestID/actions`](/api-reference/requests/actions).
+
+## Errors
+
+| Status | Body | Meaning |
+| --- | --- | --- |
+| 400 | `{ "errors": [ … Zod issues … ] }` | `message` is missing, empty, or over 4000 characters. |
+| 404 | `{ "error": "Request not found" }` | The `requestID` has no canonical request record. |
+| 409 | `{ "error": "…" }` | The assistant tried to update the request but the harness rejected the change (for example, the request is no longer open). |
+
+## Related
+
+- [Get the Buyer Decision Package](/api-reference/requests/decision)
+- [Apply a Buyer Decision](/api-reference/requests/actions)
+- [Buyer Decisions](/concepts/buyer-decisions)
