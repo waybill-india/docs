@@ -1,0 +1,171 @@
+---
+title: "Apply a Buyer Decision"
+sidebarTitle: "Buyer Actions"
+description: "POST /requests/:requestID/actions applies one buyer action to a request: accept an offer, drop or renegotiate with a supplier, qualify a supplier under review, set preferences, extend the deadline, or close and cancel."
+---
+
+Apply a single buyer decision to a request. Every action either advances an open request, ends it, or updates the mandate. The buyer is the only party that can end a request; deadlines, silence, and agent failures never do.
+
+The response is the refreshed [decision package](/api-reference/requests/decision) so the UI can re-render immediately.
+
+## Endpoint
+
+```http
+POST /requests/:requestID/actions
+```
+
+## Request body
+
+Send exactly one action. The `type` field selects the shape.
+
+### `accept_offer`
+
+Accept a specific offer version. The request moves to `awarded`. Acceptance never places an order or takes payment; those are separate steps.
+
+<ParamField body="offerID" type="string" required>
+  The `offer.offerID` from the decision package.
+</ParamField>
+
+<ParamField body="offerVersion" type="number" required>
+  The `offer.version` you reviewed. If the supplier has issued a newer version, the server rejects the acceptance so the buyer re-reads it.
+</ParamField>
+
+<ParamField body="overrides" type="string[]">
+  Any `gaps` from the offer that the buyer is knowingly accepting (for example, a missing delivery date). Defaults to `[]`.
+</ParamField>
+
+### `continue`
+
+Explicitly keep the request open. Useful after the supervisor asks a question that the buyer wants to defer.
+
+### `extend_deadline`
+
+Move the supplier response deadline. Applies only to suppliers that have not replied at all; suppliers already in conversation are unaffected. The deadline must be in the future.
+
+<ParamField body="deadline" type="string" required>
+  ISO-8601 timestamp, e.g. `"2026-10-12T00:00:00.000Z"`.
+</ParamField>
+
+### `close_without_award`
+
+Close the request without picking a winner. Moves the request to `closed`. Reason is recorded on the decision.
+
+<ParamField body="reason" type="string" required>
+  Non-empty human-readable reason.
+</ParamField>
+
+### `cancel`
+
+Cancel the request. Moves it to `cancelled`; nothing further is sent to suppliers. Prefer [`POST /requests/:requestID/cancel`](/api-reference/requests/cancel) when cancelling from outside the decision screen, because that endpoint also works before the harness snapshot exists (during intake, for example).
+
+<ParamField body="reason" type="string" required>
+  Non-empty human-readable reason.
+</ParamField>
+
+### `drop_supplier`
+
+Remove one supplier from the run. Their child thread finishes with a `buyer_dropped` marker and no further messages are sent to them.
+
+<ParamField body="supplierID" type="string" required />
+
+<ParamField body="reason" type="string" required />
+
+### `renegotiate`
+
+Give the supervisor a per-supplier instruction for the next round. Recorded in `buyerNotes[supplierID]` on the decision package.
+
+<ParamField body="supplierID" type="string" required />
+
+<ParamField body="note" type="string" required>
+  Short instruction, e.g. `"Push for 4-week lead time"`.
+</ParamField>
+
+### `set_preferences`
+
+Replace the mandate's `preferences` list. This is a mandate revision; the mandate version increments. Preferences steer the supervisor's ranking; they never override mandatory constraints.
+
+<ParamField body="preferences" type="string[]" required>
+  The full replacement list, one preference per entry.
+</ParamField>
+
+### `qualify_supplier`
+
+Break a tie when a supplier's qualification verdict is `review`. The supplier's child thread is waiting on a `buyerQualification` interrupt; this action resolves it. The buyer's disposition overrides the assessment.
+
+<ParamField body="supplierID" type="string" required />
+
+<ParamField body="disposition" type="string" required>
+  `approved` or `excluded`.
+</ParamField>
+
+## Examples
+
+<CodeGroup>
+
+```bash Accept an offer
+curl -X POST http://localhost:3001/requests/299cb5b9-…/actions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "accept_offer",
+    "offerID": "offer_01j…",
+    "offerVersion": 2,
+    "overrides": ["Delivery date not stated"]
+  }'
+```
+
+```bash Set preferences
+curl -X POST http://localhost:3001/requests/299cb5b9-…/actions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "set_preferences",
+    "preferences": [
+      "Prefer lead time under 6 weeks",
+      "Prefer authorized distributors"
+    ]
+  }'
+```
+
+```bash Qualify a review supplier
+curl -X POST http://localhost:3001/requests/299cb5b9-…/actions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "qualify_supplier",
+    "supplierID": "SUP-00187",
+    "disposition": "approved"
+  }'
+```
+
+```bash Extend the deadline
+curl -X POST http://localhost:3001/requests/299cb5b9-…/actions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "extend_deadline",
+    "deadline": "2026-10-12T00:00:00.000Z"
+  }'
+```
+
+</CodeGroup>
+
+## Response
+
+### 200 — Updated decision package
+
+Returns the same shape as [`GET /requests/:requestID/decision`](/api-reference/requests/decision), reflecting the applied action.
+
+## Errors
+
+| Status | Body | Meaning |
+| --- | --- | --- |
+| 400 | `{ "errors": [ … Zod issues … ] }` | The payload does not match any action shape (missing fields, unknown `type`, invalid `disposition`, and so on). |
+| 404 | `{ "error": "Request not found" }` | The `requestID` has no canonical request record. |
+| 409 | `{ "error": "Request <id> is <status>" }` | The action tries to change an ended request. Read the decision package to see the current `status`. |
+| 409 | `{ "error": "The new deadline must be in the future" }` | `extend_deadline` was called with a past or present timestamp. |
+| 409 | `{ "error": "Offer <id> version <n> is stale" }` | `accept_offer` was called with an outdated `offerVersion`. Re-read the decision package and resubmit against the current version. |
+| 409 | `{ "error": "…" }` | Any other action-specific rejection surfaced by the harness. |
+
+## Related
+
+- [Get the Buyer Decision Package](/api-reference/requests/decision)
+- [Cancel a Request](/api-reference/requests/cancel)
+- [Buyer Chat](/api-reference/requests/chat)
+- [Buyer Decisions](/concepts/buyer-decisions)

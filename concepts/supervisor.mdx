@@ -43,10 +43,12 @@ Inside one supplier's thread the stages run in a fixed order:
 
 1. `rfq` — send the RFQ on the assigned channel.
 2. `qualification` — assess the reply against the resolved query. Produces `qualification_verdicts` with `approved`, `review`, or `excluded`.
-3. `negotiation` — only runs if the supplier's verdict is `approved`. A verdict of `review` or `excluded` stops the thread here and is reported at award.
-4. `finish` — the thread terminates.
+3. `qualificationFollowUp` — only runs when the initial verdict is `review`. Sends one focused message to the supplier asking for exactly the proof or confirmation the assessment is missing, then re-runs `qualification` on the reply.
+4. `buyerQualification` — if the second assessment is still `review`, the thread pauses on a `buyerQualification` interrupt. The buyer resolves it via the [`qualify_supplier` action](/api-reference/requests/actions#qualify_supplier), and their disposition overrides the assessment. If the request ends before the buyer decides, the thread records `qualification_unresolved` and finishes.
+5. `negotiation` — only runs when the latest disposition is `approved`. An `excluded` verdict (from the assessment or from the buyer) stops the thread and is reported at award.
+6. `finish` — the thread terminates.
 
-The award prompt is explicitly forbidden from awarding a supplier marked `no reply`, `declined`, `withdrawn`, `failed`, `review`, or `excluded`.
+The award prompt is explicitly forbidden from awarding a supplier marked `no reply`, `declined`, `withdrawn`, `failed`, `dropped`, `review`, or `excluded`.
 
 ## workflowPolicy
 
@@ -80,10 +82,15 @@ A [`GET /supervisor/:requestID`](/api-reference/supervisor/get) response contain
 | `qualification_verdicts` | Structured per-supplier verdicts. |
 | `counter_responses` | Replies received after counter-offers. |
 | `negotiation` | Per-supplier negotiation transcript. |
+| `qualification_followup` | One follow-up message sent to a supplier whose initial verdict was `review`. |
+| `buyer_qualification` | The buyer's `approved`/`excluded` decision, recorded when they resolve a `buyerQualification` interrupt. |
+| `qualification_unresolved` | Written when the request ends before the buyer breaks a `review` tie. Terminal for that supplier. |
 | `supplier_declined` | Supplier refused the RFQ. Terminal for that supplier. |
 | `supplier_withdrawn` | Supplier pulled out mid-negotiation. Terminal for that supplier. |
 | `supplier_failed` | The supplier's child workflow crashed; recorded so the coordinator can still award. Terminal for that supplier. |
 | `supplier_no_reply` | Supplier did not respond within the waiting window. Terminal for that supplier. |
+| `buyer_dropped` | The buyer removed this supplier via [`drop_supplier`](/api-reference/requests/actions#drop_supplier). Terminal for that supplier. |
+| `request_ended` | The request was cancelled, awarded, or closed while this supplier's thread was still open. Terminal for that supplier. |
 | `award_recommendation` | The coordinator's single markdown award recommendation, appended once every child finishes. |
 
 ## Polling pattern
@@ -94,5 +101,6 @@ Poll `GET /supervisor/:requestID` every 5–10 seconds after starting the run. S
 
 - [Get supervisor state](/api-reference/supervisor/get)
 - [Handoff to the supervisor](/api-reference/search/handoff)
+- [Buyer decisions](/concepts/buyer-decisions)
 - [Structured messages](/concepts/structured-messages)
 - [Rendering results](/guides/rendering-results)

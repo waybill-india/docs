@@ -50,7 +50,7 @@ When the supervisor is paused for supplier replies, `interrupts` contains a `wai
 
 ## Terminal supplier markers
 
-Each supplier's workflow can end with one of four terminal markers in the merged `messages` timeline. Render every marker — dropping them silently hides why a supplier is missing from the award.
+Each supplier's workflow can end with one of several terminal markers in the merged `messages` timeline. Render every marker — dropping them silently hides why a supplier is missing from the award.
 
 | Name | Render as | When it appears |
 | --- | --- | --- |
@@ -58,8 +58,11 @@ Each supplier's workflow can end with one of four terminal markers in the merged
 | `supplier_withdrawn` | "Withdrawn" | The supplier pulled out mid-negotiation. |
 | `supplier_failed` | "Failed" | The supplier's child workflow crashed. Cross-reference the top-level `errors[]` entry for the same `supplierID` to show the operator message. |
 | `supplier_no_reply` | "No reply" | The supplier did not respond in time. |
+| `buyer_dropped` | "Dropped by buyer" | The buyer removed this supplier via [`drop_supplier`](/api-reference/requests/actions#drop_supplier). |
+| `request_ended` | "Request ended" | The request was cancelled, awarded, or closed while this supplier's thread was still open. |
+| `qualification_unresolved` | "Qualification unresolved" | The buyer did not break a `review` tie before the request ended. |
 
-Suppliers marked declined, withdrawn, failed, or no-reply are excluded from award; so are qualification `review` and `excluded` verdicts. Show all of them in a "not awarded" section with their marker or verdict as the reason.
+Suppliers marked declined, withdrawn, failed, no-reply, dropped, or ended are excluded from award; so is an `excluded` qualification verdict. Suppliers with a `review` verdict are not terminal — the supervisor sends one `qualification_followup` message and re-assesses. If the second verdict is still `review`, the thread waits for the buyer's [`qualify_supplier`](/api-reference/requests/actions#qualify_supplier) decision; surface that as an "awaiting buyer" state and link the buyer to their decision screen.
 
 ## Per-supplier errors
 

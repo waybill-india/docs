@@ -106,6 +106,7 @@ Poll [`GET /supervisor/:requestID`](/api-reference/supervisor/get) to track the 
 | 400 | `{ "error": "Unknown suppliers: SUP-xxx" }` | A `supplierID` in the payload is not present in the web search results for this request. |
 | 404 | `{ "error": "Request not found" }` | The `requestID` does not exist. |
 | 404 | `{ "error": "No web search for this request" }` | The parallel web search never started for this request, so there is nothing to hand off. |
+| 409 | `{ "error": "Request was cancelled" }` | The request was cancelled via [`POST /requests/:requestID/cancel`](/api-reference/requests/cancel). |
 | 409 | `{ "error": "Intake is not resolved yet", "status": "…" }` | Intake is still asking clarifying questions. Resolve it first. |
 | 409 | `{ "error": "Request was already handed off to the supervisor", "status": "…" }` | A supervisor run already exists for this request. |
 | 409 | `{ "error": "Supplier discovery is still running", "status": "running" }` | The web search is not finished yet. Wait for it to complete before handing off. |

@@ -1,0 +1,93 @@
+---
+title: "Cancel a Request"
+sidebarTitle: "Cancel"
+description: "POST /requests/:requestID/cancel stops a request at any stage; GET /requests/:requestID/cancel reads the current cancellation record. Cancelled requests reject every write endpoint with 409."
+---
+
+Cancel a request at any stage: during intake, during sourcing, while the supervisor is awaiting supplier replies, or after the harness snapshot exists. Cancelling stops in-flight sends, blocks new ones, and finishes every open supplier thread with a `request_ended` marker. Nothing further is sent to suppliers.
+
+Unlike the [`cancel` buyer action](/api-reference/requests/actions#cancel), this endpoint works even before a canonical request snapshot has been created, so it is the right cancel path from every UI screen.
+
+## Read the cancellation
+
+```http
+GET /requests/:requestID/cancel
+```
+
+<CodeGroup>
+
+```bash cURL
+curl http://localhost:3001/requests/299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21/cancel
+```
+
+</CodeGroup>
+
+### 200 — Cancellation status
+
+```json
+{
+  "cancellation": {
+    "reason": "Buyer changed their mind",
+    "cancelledAt": "2026-09-27T14:22:31.104Z"
+  }
+}
+```
+
+`cancellation` is `null` when the request has not been cancelled.
+
+## Cancel a request
+
+```http
+POST /requests/:requestID/cancel
+```
+
+### Request body
+
+<ParamField body="reason" type="string" required>
+  Non-empty human-readable reason (max 1000 characters).
+</ParamField>
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST http://localhost:3001/requests/299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21/cancel \
+  -H "Content-Type: application/json" \
+  -d '{"reason": "Buyer changed their mind"}'
+```
+
+</CodeGroup>
+
+### 200 — Cancelled
+
+```json
+{
+  "cancellation": {
+    "reason": "Buyer changed their mind",
+    "cancelledAt": "2026-09-27T14:22:31.104Z"
+  }
+}
+```
+
+Cancelling a request that is already `cancelled` returns the existing record without erroring.
+
+## Effect on other endpoints
+
+Once a request is cancelled, every write endpoint that would touch it returns `409` with:
+
+```json
+{ "error": "Request was cancelled" }
+```
+
+That includes `POST /intake/:requestID/answer`, `POST /search/:requestID`, `POST /search/:requestID/handoff`, and `POST /supervisor`. Read endpoints (`GET /intake/:requestID`, `GET /supervisor/:requestID`, `GET /requests/:requestID/decision`, `GET /requests/:requestID/chat`) continue to work.
+
+## Errors
+
+| Status | Body | Meaning |
+| --- | --- | --- |
+| 400 | `{ "errors": [ … Zod issues … ] }` | `reason` is missing, empty, or over 1000 characters. |
+| 409 | `{ "error": "Request <id> is <status>" }` | The request already ended in `awarded` or `closed`; it cannot be cancelled. |
+
+## Related
+
+- [Apply a Buyer Decision](/api-reference/requests/actions)
+- [Buyer Decisions](/concepts/buyer-decisions)

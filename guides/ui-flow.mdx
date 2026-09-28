@@ -80,6 +80,16 @@ waybill-arc exposes a stateful, poll-based API that you can drive from any front
   <Step title="Show the final recommendation">
     The last `messages` entry with `name: "award_recommendation"` is the coordinator's markdown award recommendation, appended once every supplier's child thread finishes. Render it with a markdown renderer. The full `messages` array serves as a timeline.
   </Step>
+  <Step title="Drive the buyer decision screen">
+    Once negotiation is producing offers, drive the buyer's decision from the canonical harness rather than the supervisor timeline:
+
+    - Poll [`GET /requests/:requestID/decision`](/api-reference/requests/decision) for the ranked offer options, their gaps against the mandate, the supervisor's recommendation and open questions, and the live model cost.
+    - Apply the buyer's choices with [`POST /requests/:requestID/actions`](/api-reference/requests/actions): `accept_offer`, `close_without_award`, `drop_supplier`, `renegotiate`, `set_preferences`, `extend_deadline`, or `qualify_supplier` for a supplier waiting on a `buyerQualification` interrupt.
+    - Wire the decision-screen chat to [`POST /requests/:requestID/chat`](/api-reference/requests/chat). The assistant answers grounded in the decision package and can update preferences or start one more negotiation round with a supplier when the buyer asks in their own words.
+    - Cancel from any screen with [`POST /requests/:requestID/cancel`](/api-reference/requests/cancel). Once cancelled, every write endpoint returns `409 { "error": "Request was cancelled" }`.
+
+    See [Buyer Decisions](/concepts/buyer-decisions) for the full model.
+  </Step>
 </Steps>
 
 ## Suggested screens
@@ -90,7 +100,8 @@ Map the flow above to these UI views:
 - **Clarification chat** — a Q&A loop while `awaiting_answer`; options as chips plus a free-text input.
 - **Review spec** — render `resolvedQuery` (part name, specs table, quantity, sources) with a "Find suppliers" button.
 - **Supplier discovery** — show `request.selections` with the reasoning for each contacted supplier.
-- **Run progress** — poll `GET /supervisor/:requestID`; display `waitingFor` badges, the `quotes` comparison, per-supplier terminal markers (declined / withdrawn / failed / no reply), any `errors[]`, and the `messages` timeline.
-- **Result** — the final `award_recommendation` message as the recommendation, with the timeline available for review.
+- **Run progress** — poll `GET /supervisor/:requestID`; display `waitingFor` badges, the `quotes` comparison, per-supplier terminal markers (declined / withdrawn / failed / no reply / dropped / ended), any `errors[]`, and the `messages` timeline.
+- **Buyer decision** — poll [`GET /requests/:requestID/decision`](/api-reference/requests/decision); render the ranked offer options, their gaps and constraint results, the supervisor's recommendation and questions, `openIssues`, and `costUSD`. Wire buttons to [`POST /requests/:requestID/actions`](/api-reference/requests/actions) and the chat panel to [`POST /requests/:requestID/chat`](/api-reference/requests/chat). A cancel button anywhere in the flow calls [`POST /requests/:requestID/cancel`](/api-reference/requests/cancel).
+- **Result** — the recorded `decision` on the decision package (accepted offer, close reason, or cancellation) plus the coordinator's `award_recommendation` message from the supervisor timeline.
 
 For details on how to parse and render the supervisor output, see [Rendering Results](/guides/rendering-results).

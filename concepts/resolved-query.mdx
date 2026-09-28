@@ -24,6 +24,7 @@ When waybill-arc intake finishes, it returns a `ResolvedQuery`. This is the stru
 | `quantity.packaging` | string \| null | Packaging type, such as "tray" or "tape and reel". |
 | `confidence` | number | 0–1 confidence score from the intake agent. |
 | `unresolvedTerms` | string\[\] | Terms the agent could not resolve. |
+| `priorities` | string\[\] | Buyer priorities captured during intake (for example, `"prefer lead time under 6 weeks"`). Seed the mandate `preferences` for [buyer decisions](/concepts/buyer-decisions); defaults to `[]`. |
 | `sources` | object\[\] | Evidence sources used to build the spec. |
 | `sources[].url` | string | Source URL. |
 | `sources[].note` | string | Short description of what the source confirms. |
@@ -44,6 +45,7 @@ When waybill-arc intake finishes, it returns a `ResolvedQuery`. This is the stru
   "quantity": { "value": 2000, "unit": "units", "packaging": "tray" },
   "confidence": 0.96,
   "unresolvedTerms": [],
+  "priorities": ["Prefer lead time under 6 weeks"],
   "sources": [
     { "url": "https://www.st.com/…", "note": "Official ST product page…" }
   ]
