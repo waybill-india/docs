@@ -11,7 +11,7 @@ waybill-arc reads its configuration from a `.env` file in the repo root, validat
 </Note>
 
 <Note>
-  The bundled `.env.example` groups keys into five sections: **REQUIRED**, **LOCAL TESTING**, **EMAIL**, **WHATSAPP**, and **OPTIONAL**. `SUPPLIER_SIMULATOR` defaults to `false` in the example so a fresh copy talks to real discovery unless you opt into the simulator.
+  The bundled `.env.example` groups keys into six sections: **REQUIRED**, **LOCAL TESTING**, **EMAIL**, **WHATSAPP**, **INTAKE TUNING**, and **OPTIONAL**. `SUPPLIER_SIMULATOR` defaults to `false` in the example so a fresh copy talks to real discovery unless you opt into the simulator.
 </Note>
 
 ## Required
@@ -74,15 +74,10 @@ TEST_SUPPLIERS=[{"id":"test-email-1","channel":"email","address":"first@example.
 | `AGENTMAIL_WEBHOOK_SECRET` | — | Svix signing secret for `POST /webhook/email` |
 | `AGENTMAIL_INBOX_ID` | — | Use an existing inbox instead of creating one |
 | `AGENTMAIL_INBOX_USERNAME` | `procurement` | Username for the shared inbox created on first use |
-| `EMAIL_LIVE_DELIVERY` | `false` | When `false`, every outbound RFQ is redirected to the test recipients instead of the real supplier |
-| `EMAIL_TEST_ADDRESS` | — | Single test recipient used while `EMAIL_LIVE_DELIVERY=false` |
-| `EMAIL_TEST_ADDRESSES` | — | Comma-separated list of test recipients. All listed addresses receive the redirected RFQ |
+| `EMAIL_LIVE_DELIVERY` | `false` | When `false`, every outbound RFQ is redirected to `EMAIL_TEST_ADDRESS` instead of the real supplier |
+| `EMAIL_TEST_ADDRESS` | — | Test recipient used while `EMAIL_LIVE_DELIVERY=false` |
 
-`EMAIL_TEST_ADDRESSES` is a sibling of `EMAIL_TEST_ADDRESS` for the common case of routing test RFQs to several inboxes at once. If both are set, `EMAIL_TEST_ADDRESSES` wins. One of `EMAIL_TEST_ADDRESS`, `EMAIL_TEST_ADDRESSES`, or `TEST_SUPPLIERS` is required whenever `AGENTMAIL_API_KEY` is set and `EMAIL_LIVE_DELIVERY=false`.
-
-```sh
-EMAIL_TEST_ADDRESSES=first@example.com,second@example.com
-```
+Either `EMAIL_TEST_ADDRESS` or `TEST_SUPPLIERS` is required whenever `AGENTMAIL_API_KEY` is set and `EMAIL_LIVE_DELIVERY=false`.
 
 ## WhatsApp channel (Meta Cloud API)
 
@@ -100,11 +95,13 @@ The WhatsApp block is all-or-nothing: leave every key blank to disable the chann
 | `WHATSAPP_DIRECT_URL` | — | Direct Postgres URL used only by `npm run db:deploy` |
 | `WHATSAPP_LIVE_DELIVERY` | `false` | When `false`, every outbound WhatsApp message is redirected to `WHATSAPP_TEST_NUMBER` |
 | `WHATSAPP_TEST_NUMBER` | — | Test recipient used while `WHATSAPP_LIVE_DELIVERY=false` (E.164, e.g. `+911234567890`) |
-| `WHATSAPP_ENQUIRY_TEMPLATE` | `waybill_enquiry` | Name of the approved template used for the first outbound RFQ |
-| `WHATSAPP_FOLLOWUP_TEMPLATE` | `waybill_followup` | Name of the approved template used for follow-up messages |
+| `WHATSAPP_ENQUIRY_TEMPLATE` | `waybill_enquiry` | Name of the Meta-approved template used for the first outbound message (outside the 24-hour reply window) |
+| `WHATSAPP_FOLLOWUP_TEMPLATE` | `waybill_followup` | Name of the Meta-approved template used for follow-up messages outside the 24-hour reply window |
 | `WHATSAPP_TEMPLATE_LANGUAGE` | `en` | Language code of the approved templates |
+| `GRAPH_API_BASE_URL` | `https://graph.facebook.com` | Meta Graph API host |
+| `GRAPH_API_VERSION` | `v26.0` | Meta Graph API version. Bump when Meta retires the current version |
 
-`WHATSAPP_TEST_NUMBER` is required whenever WhatsApp is configured and `WHATSAPP_LIVE_DELIVERY=false`, unless `TEST_SUPPLIERS` covers it. Override the template names and language to match the exact templates you have approved in the Meta Business Manager.
+`WHATSAPP_TEST_NUMBER` is required whenever WhatsApp is configured and `WHATSAPP_LIVE_DELIVERY=false`, unless `TEST_SUPPLIERS` covers it. Override the template names and language to match the exact templates you have approved in Meta Business Manager.
 
 ## Voice/SMS channel (Vapi)
 
@@ -146,7 +143,7 @@ AGENTMAIL_WEBHOOK_SECRET=whsec_...
 AGENTMAIL_INBOX_ID=inbox_...
 AGENTMAIL_INBOX_USERNAME=procurement
 EMAIL_LIVE_DELIVERY=false
-EMAIL_TEST_ADDRESSES=first@example.com,second@example.com
+EMAIL_TEST_ADDRESS=you@example.com
 
 # WhatsApp channel (optional)
 WHATSAPP_ACCESS_TOKEN=...
