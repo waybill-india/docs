@@ -1,0 +1,107 @@
+---
+title: "Start an Ad-hoc Purchase"
+sidebarTitle: "Start purchase"
+description: "POST /purchase starts an automated web checkout that pays with a single-use AgentCard virtual card. Returns 202 with a purchaseId to poll."
+---
+
+Use `POST /purchase` to buy from a web store without an intake request. waybill-arc runs a Browser Use agent to reach the payment form, mints a single-use AgentCard locked to the discovered total, and pays in the same session. The call returns immediately with `202`. Poll [`GET /purchase/:purchaseId`](/api-reference/purchase/get) for progress.
+
+To buy what a resolved intake request asks for, use [`POST /purchase/request/:requestID`](/api-reference/purchase/from-request) instead. See [Automated checkout](/guides/automated-checkout) for the full flow.
+
+## Authentication
+
+Send `ARC_API_KEY` as `Authorization: Bearer <key>` or `X-API-Key: <key>`.
+
+## Request
+
+`POST /purchase`
+
+<ParamField body="checkoutUrl" type="string">
+  Product, cart, or checkout URL to start from. Provide `checkoutUrl`, `task`, or both.
+</ParamField>
+
+<ParamField body="task" type="string">
+  Free-text instructions for the agent, up to 4000 characters. For example, `Buy 10 units of STM32F103C8T6.`
+</ParamField>
+
+<ParamField body="expectedAmountCents" type="integer">
+  Expected order total in US cents, minimum `100`. The discovered total must fall within ±5% of this value or the purchase fails before a card is minted.
+</ParamField>
+
+<ParamField body="requestId" type="string">
+  Ties the purchase to a request. Only one in-flight or succeeded purchase can exist per `requestId`.
+</ParamField>
+
+<ParamField body="userId" type="string">
+  Browser profile owner. Must be sent together with `site`. Also selects the shipping address, falling back to the default address.
+</ParamField>
+
+<ParamField body="site" type="string">
+  Site the browser profile is connected to. Must be sent together with `userId`.
+</ParamField>
+
+<ParamField body="profileId" type="string">
+  Browser Use profile ID. If the profile is connected to a different `userId` and `site`, the call returns `403`.
+</ParamField>
+
+<ParamField body="login" type="object">
+  Inline store credentials. Requires `checkoutUrl`. Cannot be combined with `profileId`, `userId`, or `site`.
+
+  <Expandable title="properties">
+    <ParamField body="email" type="string" required>
+      Login email. If it is a readable AgentMail inbox, waybill-arc fills emailed sign-in codes automatically.
+    </ParamField>
+    <ParamField body="password" type="string">
+      Login password. Omit for passwordless email-code logins.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField body="currency" type="string" default="usd">
+  Only `usd` is supported.
+</ParamField>
+
+```bash
+curl -X POST http://localhost:3001/purchase \
+  -H "Authorization: Bearer $ARC_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "checkoutUrl": "https://shop.example.com/products/stm32f103c8t6",
+    "task": "Buy 10 units of STM32F103C8T6.",
+    "expectedAmountCents": 4250
+  }'
+```
+
+## Response
+
+Returns `202 Accepted`.
+
+<ResponseField name="purchaseId" type="string">
+  UUID of the new purchase.
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  Always `pending`.
+</ResponseField>
+
+```json
+{
+  "purchaseId": "8f0f6c2e-5d0b-4a8e-9f57-2a1d3c4b5e6f",
+  "status": "pending"
+}
+```
+
+## Errors
+
+| Status | Body |
+| --- | --- |
+| 400 | `{ "errors": [...] }`. For example, neither `checkoutUrl` nor `task` was provided |
+| 401 | Missing or invalid API key |
+| 403 | `profileId` is connected to a different user or site |
+| 409 | `{ "error": "A purchase for this request is already in flight or succeeded", "purchaseId", "status", "confirmation" }` |
+| 503 | `ARC_API_KEY` or the `AGENTCARD_*` variables are not configured |
+
+## Related pages
+
+- [Automated checkout](/guides/automated-checkout)
+- [GET /purchase/:purchaseId](/api-reference/purchase/get)

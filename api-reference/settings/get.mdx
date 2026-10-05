@@ -1,0 +1,48 @@
+---
+title: "Get Settings"
+sidebarTitle: "Get settings"
+description: "GET /settings returns the default shipping address the automated checkout agent enters at checkout."
+---
+
+Use `GET /settings` to read the default shipping address. The [automated checkout](/guides/automated-checkout) agent ships every purchase to this address.
+
+## Authentication
+
+Send `ARC_API_KEY` as `Authorization: Bearer <key>` or `X-API-Key: <key>`.
+
+## Request
+
+`GET /settings`
+
+```bash
+curl http://localhost:3001/settings \
+  -H "Authorization: Bearer $ARC_API_KEY"
+```
+
+## Response
+
+<ResponseField name="shippingAddress" type="object | null">
+  The default shipping address, or `null` if none is saved. See [PUT /settings](/api-reference/settings/update) for the fields.
+</ResponseField>
+
+```json
+{
+  "shippingAddress": {
+    "name": "Waybill Receiving",
+    "line1": "500 Market St",
+    "line2": "Suite 200",
+    "city": "San Francisco",
+    "state": "CA",
+    "postalCode": "94105",
+    "country": "US",
+    "phone": "+14155550100"
+  }
+}
+```
+
+## Errors
+
+| Status | Body |
+| --- | --- |
+| 401 | Missing or invalid API key |
+| 503 | `ARC_API_KEY` is not configured |

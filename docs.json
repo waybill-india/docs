@@ -46,7 +46,8 @@
               "guides/ui-flow",
               "guides/rendering-results",
               "guides/channels",
-              "guides/webhooks"
+              "guides/webhooks",
+              "guides/automated-checkout"
             ]
           },
           {
@@ -89,6 +90,22 @@
             "pages": [
               "api-reference/supervisor/get",
               "api-reference/supervisor/start"
+            ]
+          },
+          {
+            "group": "Purchase",
+            "pages": [
+              "api-reference/purchase/start",
+              "api-reference/purchase/from-request",
+              "api-reference/purchase/get",
+              "api-reference/purchase/get-by-request"
+            ]
+          },
+          {
+            "group": "Settings",
+            "pages": [
+              "api-reference/settings/get",
+              "api-reference/settings/update"
             ]
           },
           {

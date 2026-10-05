@@ -1,0 +1,108 @@
+---
+title: "Purchase a Resolved Request"
+sidebarTitle: "Purchase request"
+description: "POST /purchase/request/:requestID buys the part and quantity from a resolved intake request using automated checkout with a single-use AgentCard."
+---
+
+Use `POST /purchase/request/:requestID` to buy what a resolved intake request asks for. waybill-arc builds the agent's mission from the resolved part name, manufacturer, and quantity. It then runs the same checkout flow as [`POST /purchase`](/api-reference/purchase/start).
+
+waybill-arc picks the checkout URL in this order:
+
+1. `checkoutUrl` from the request body.
+2. The first URL in the original intake query.
+3. The first product URL from the request's marketplace search.
+
+## Authentication
+
+Send `ARC_API_KEY` as `Authorization: Bearer <key>` or `X-API-Key: <key>`.
+
+## Request
+
+`POST /purchase/request/:requestID`
+
+<ParamField path="requestID" type="string" required>
+  The UUID returned by `POST /intake`. Intake must be resolved.
+</ParamField>
+
+<ParamField body="checkoutUrl" type="string">
+  Overrides the URL waybill-arc would otherwise find.
+</ParamField>
+
+<ParamField body="expectedAmountCents" type="integer">
+  Expected order total in US cents, minimum `100`. The discovered total must fall within ±5% of this value.
+</ParamField>
+
+<ParamField body="userId" type="string">
+  Browser profile owner. Must be sent together with `site`.
+</ParamField>
+
+<ParamField body="site" type="string">
+  Site the browser profile is connected to. Must be sent together with `userId`.
+</ParamField>
+
+<ParamField body="profileId" type="string">
+  Browser Use profile ID.
+</ParamField>
+
+<ParamField body="login" type="object">
+  Inline store credentials with `email` and optional `password`. Cannot be combined with `profileId`, `userId`, or `site`. See [Signing in to the store](/guides/automated-checkout#signing-in-to-the-store).
+</ParamField>
+
+```bash
+curl -X POST http://localhost:3001/purchase/request/299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21 \
+  -H "Authorization: Bearer $ARC_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "expectedAmountCents": 4250 }'
+```
+
+## Response
+
+Returns `202 Accepted`.
+
+<ResponseField name="purchaseId" type="string">
+  UUID of the new purchase.
+</ResponseField>
+
+<ResponseField name="requestID" type="string">
+  The request UUID.
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  Always `pending`.
+</ResponseField>
+
+<ResponseField name="mission" type="string">
+  The task given to the agent, built from the resolved query.
+</ResponseField>
+
+<ResponseField name="checkoutUrl" type="string">
+  The URL the agent starts from.
+</ResponseField>
+
+```json
+{
+  "purchaseId": "8f0f6c2e-5d0b-4a8e-9f57-2a1d3c4b5e6f",
+  "requestID": "299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21",
+  "status": "pending",
+  "mission": "Buy 2000 units of \"STM32F103C8T6\" by STMicroelectronics.",
+  "checkoutUrl": "https://shop.example.com/products/stm32f103c8t6"
+}
+```
+
+## Errors
+
+| Status | Body |
+| --- | --- |
+| 400 | `{ "errors": [...] }` |
+| 401 | Missing or invalid API key |
+| 403 | `profileId` is connected to a different user or site |
+| 404 | `{ "error": "Request not found" }` |
+| 409 | `{ "error": "Intake is not resolved yet", "status": "..." }` |
+| 409 | `{ "error": "This request was already purchased" }` or `"A purchase for this request is already in flight"`, with `purchaseId`, `status`, and `confirmation` |
+| 422 | No purchase URL is known for this request |
+| 503 | `ARC_API_KEY` or the `AGENTCARD_*` variables are not configured |
+
+## Related pages
+
+- [Automated checkout](/guides/automated-checkout)
+- [GET /purchase/request/:requestID](/api-reference/purchase/get-by-request)

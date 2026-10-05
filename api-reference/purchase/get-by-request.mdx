@@ -1,0 +1,41 @@
+---
+title: "Get a Request's Purchase"
+sidebarTitle: "Get request purchase"
+description: "GET /purchase/request/:requestID returns the latest automated checkout purchase for an intake request, with the same shape as GET /purchase/:purchaseId."
+---
+
+Use `GET /purchase/request/:requestID` to find the latest purchase for a request when you don't have its `purchaseId`. For example, use it to rehydrate a UI after a page reload. Stale non-terminal purchases are reconciled before the response, the same as [`GET /purchase/:purchaseId`](/api-reference/purchase/get).
+
+## Authentication
+
+Send `ARC_API_KEY` as `Authorization: Bearer <key>` or `X-API-Key: <key>`.
+
+## Request
+
+`GET /purchase/request/:requestID`
+
+<ParamField path="requestID" type="string" required>
+  The request UUID.
+</ParamField>
+
+```bash
+curl http://localhost:3001/purchase/request/299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21 \
+  -H "Authorization: Bearer $ARC_API_KEY"
+```
+
+## Response
+
+Returns the purchase record. See [GET /purchase/:purchaseId](/api-reference/purchase/get#response) for every field.
+
+## Errors
+
+| Status | Body |
+| --- | --- |
+| 401 | Missing or invalid API key |
+| 404 | `{ "error": "No purchase for this request" }` |
+| 503 | `ARC_API_KEY` or the `AGENTCARD_*` variables are not configured |
+
+## Related pages
+
+- [POST /purchase/request/:requestID](/api-reference/purchase/from-request)
+- [Automated checkout](/guides/automated-checkout)
