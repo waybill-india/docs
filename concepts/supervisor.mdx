@@ -22,8 +22,7 @@ Consequences of this model:
 - Each child has its own checkpoint and lock, so a crash in one supplier's workflow does not corrupt the run. The coordinator records a `supplier_failed` marker for that supplier and still awards over the rest.
 - Channel routing is per supplier via `request.supplierChannels`, so one run can talk to some suppliers over email and others over WhatsApp.
 - If every child thread finishes before the coordinator's own state is persisted, [`GET /supervisor/:requestID`](/api-reference/supervisor/get) fabricates a stitched view from the child checkpoints so the UI still works.
-
-To read a single supplier's thread in isolation, use [`GET /supervisor/:requestID/:supplierID`](/api-reference/supervisor/get#read-a-single-supplier-thread).
+- Calling [`POST /search/:requestID/handoff`](/api-reference/search/handoff) again on a live run **adds suppliers** to the coordinator rather than failing. The new suppliers get their own child threads and the coordinator keeps waiting on every supplier before awarding.
 
 ## Supervisor lifecycle
 
@@ -50,23 +49,11 @@ Inside one supplier's thread the stages run in a fixed order:
 
 The award prompt is explicitly forbidden from awarding a supplier marked `no reply`, `declined`, `withdrawn`, `failed`, `dropped`, `review`, or `excluded`.
 
-## workflowPolicy
-
-Callers can disable stages by passing `workflowPolicy` on [`POST /search/:requestID/handoff`](/api-reference/search/handoff) (or `POST /supervisor`). All flags default to `true`:
-
-| Flag | When `false` |
-| --- | --- |
-| `sendRfqs` | No RFQ is sent; each child finishes immediately. |
-| `runQualification` | Qualification is skipped. Without a verdict there is no gate, so every replying supplier proceeds to negotiation. |
-| `normalizeQuotes` | The `quotes` message is not produced. |
-| `negotiate` | The negotiation round is skipped. |
-| `recommendAward` | The coordinator does not produce an `award_recommendation`. |
-
 ## Supervisor response fields
 
 A [`GET /supervisor/:requestID`](/api-reference/supervisor/get) response contains:
 
-- **`request`** — the full request context, including `selectedSupplierIDs`, `supplierChannels` (per-supplier channel routing), `workflowPolicy`, `selections`, and the `resolvedQuery`.
+- **`request`** — the full request context, including `selectedSupplierIDs`, `supplierChannels` (per-supplier channel routing), `selections`, and the `resolvedQuery`.
 - **`interrupts`** — when the run is waiting, each interrupt lists which supplier IDs it is `waitingFor`.
 - **`errors`** — per-supplier failure messages recorded when a child workflow crashed. Present alongside a `supplier_failed` marker in the timeline.
 - **`messages`** — the merged timeline of every child thread, followed by the coordinator's `award_recommendation`.

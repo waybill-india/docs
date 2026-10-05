@@ -58,7 +58,7 @@ waybill-arc exposes a stateful, poll-based API that you can drive from any front
       }'
     ```
 
-    Pass an optional `workflowPolicy` (`sendRfqs`, `runQualification`, `normalizeQuotes`, `negotiate`, `recommendAward` — all default `true`) to skip stages. If any assigned supplier is unreachable on the requested channel, the response is `422` with `Missing contact for: …`.
+    If any assigned supplier is unreachable on the requested channel, the response is `422` with `Missing contact for: …`. Call the same endpoint again on a live run to add more suppliers to the coordinator.
   </Step>
   <Step title="Poll the supervisor">
     Poll `GET /supervisor/:requestID` every 5–10 seconds until `status` is `completed`.

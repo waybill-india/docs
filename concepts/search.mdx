@@ -59,12 +59,20 @@ By default, web candidates are an **independent outreach list** you can present 
 
 ## Handing off web candidates
 
-`POST /search/:requestID/handoff` accepts either shape:
+`POST /search/:requestID/handoff` takes a `suppliers` array where each entry assigns a channel per supplier for mixed-channel runs (for example, some over email, others over WhatsApp):
 
-- `{ suppliers: [{ supplierID, channel }] }` — assign a channel per supplier for mixed-channel runs (for example, some over email, others over WhatsApp).
-- `{ supplierIDs, channel }` — the original all-on-one-channel form.
+```json
+{
+  "suppliers": [
+    { "supplierID": "SUP-webA", "channel": "email" },
+    { "supplierID": "SUP-webB", "channel": "whatsapp" }
+  ]
+}
+```
 
-Both shapes accept an optional `workflowPolicy` that lets you skip stages (`sendRfqs`, `runQualification`, `normalizeQuotes`, `negotiate`, `recommendAward` — all default `true`). The supervisor then runs one child thread per supplier under a coordinator; see [Supervisor](/concepts/supervisor) for the model.
+The supervisor then runs one child thread per supplier under a coordinator; see [Supervisor](/concepts/supervisor) for the model.
+
+Call the endpoint again on a live run to **add more suppliers** to the running coordinator; already-selected suppliers are kept as-is and the coordinator waits on every supplier before awarding.
 
 If any assigned supplier is unreachable on the requested channel (no email address, or no WhatsApp-capable phone number), the handoff returns `422` with an error text of the form `Missing contact for: <Supplier Name> (email address), …`.
 

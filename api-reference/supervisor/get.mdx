@@ -6,7 +6,7 @@ description: "GET /supervisor/:requestID polls the procurement run state until i
 
 Poll the supervisor run to track RFQ progress, view incoming quotes, and read the final award recommendation. Call this endpoint after [`POST /search/:requestID/handoff`](/api-reference/search/handoff) (or [`POST /search/:requestID`](/api-reference/search/start)) returns a non-null `supervisor` object, then poll every 5–10 seconds until `status` is `completed`.
 
-Each supplier runs in its own child thread under a coordinator. This endpoint returns the merged coordinator view. To read one supplier's thread in isolation, use [`GET /supervisor/:requestID/:supplierID`](#read-a-single-supplier-thread) below.
+Each supplier runs in its own child thread under a coordinator. This endpoint returns the merged coordinator view.
 
 ## Endpoint
 
@@ -39,13 +39,6 @@ curl http://localhost:3001/supervisor/299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21
       "SUP-00142": "email",
       "SUP-00187": "whatsapp"
     },
-    "workflowPolicy": {
-      "sendRfqs": true,
-      "runQualification": true,
-      "normalizeQuotes": true,
-      "negotiate": true,
-      "recommendAward": true
-    },
     "selections": [
       {
         "supplierID": "SUP-00142",
@@ -77,10 +70,6 @@ curl http://localhost:3001/supervisor/299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21
   Map of `supplierID` to the channel used for that supplier (`email`, `whatsapp`, `simulator`, `voice`, or `sms`). Populated from the handoff payload and may differ per supplier for mixed-channel runs. Missing keys fall back to `request.channel`.
 </ResponseField>
 
-<ResponseField name="request.workflowPolicy" type="object">
-  Which stages the coordinator will run. All flags default to `true`. See [`POST /search/:requestID/handoff`](/api-reference/search/handoff) for the meaning of each flag.
-</ResponseField>
-
 <ResponseField name="interrupts" type="array">
   Lists suppliers the coordinator is currently waiting for. Use this to show "waiting for reply" badges.
 
@@ -97,7 +86,7 @@ curl http://localhost:3001/supervisor/299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21
 
 ## Message names
 
-The `messages` timeline includes per-stage entries (`rfq`, `supplier_responses`, `quotes`, `qualification`, `qualification_verdicts`, `counter_responses`, `negotiation`) plus four **terminal supplier markers** and the coordinator's final `award_recommendation`.
+The `messages` timeline includes per-stage entries (`rfq`, `supplier_responses`, `quotes`, `qualification`, `qualification_verdicts`, `counter_responses`, `negotiation`) plus **terminal supplier markers** and the coordinator's final `award_recommendation`.
 
 | Name | Meaning |
 | --- | --- |
@@ -162,42 +151,11 @@ One verdict per selected supplier.
 
 `review` means the assessment was inconclusive or silent about that supplier. Only `approved` suppliers proceed to negotiation. A `review` verdict triggers a one-message follow-up with the supplier and a second assessment; if the second assessment is still `review`, the thread waits for the buyer to break the tie via [`qualify_supplier`](/api-reference/requests/actions#qualify_supplier). An `excluded` verdict stops the thread and is reported at award. The `qualification` message holds the full narrative for a details view.
 
-## Read a single supplier thread
-
-```http
-GET /supervisor/:requestID/:supplierID
-```
-
-Returns the same shape as `GET /supervisor/:requestID` but scoped to one supplier's child thread (`<requestID>:supplier:<supplierID>`). Use it to render per-supplier detail views without reasoning about the merged coordinator timeline.
-
-<CodeGroup>
-
-```bash cURL
-curl http://localhost:3001/supervisor/299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21/SUP-00142
-```
-
-</CodeGroup>
-
-The response includes the `supplierID` on the envelope:
-
-```json
-{
-  "requestID": "299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21",
-  "supplierID": "SUP-00142",
-  "status": "in_progress",
-  "request": { },
-  "messages": [ ],
-  "interrupts": [ ],
-  "errors": [ ]
-}
-```
-
 ## Errors
 
 | Status | Body | Meaning |
 | --- | --- | --- |
 | 404 | `{ "error": "Request not found" }` | The `requestID` has no supervisor run. |
-| 404 | `{ "error": "Supplier workflow not found" }` | `GET /supervisor/:requestID/:supplierID` was called with a `supplierID` that has no child thread. |
 
 ## Related
 

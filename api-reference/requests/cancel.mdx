@@ -78,7 +78,7 @@ Once a request is cancelled, every write endpoint that would touch it returns `4
 { "error": "Request was cancelled" }
 ```
 
-That includes `POST /intake/:requestID/answer`, `POST /search/:requestID`, `POST /search/:requestID/handoff`, and `POST /supervisor`. Read endpoints (`GET /intake/:requestID`, `GET /supervisor/:requestID`, `GET /requests/:requestID/decision`, `GET /requests/:requestID/chat`) continue to work.
+That includes `POST /intake/:requestID/answer`, `POST /search/:requestID`, and `POST /search/:requestID/handoff`. Read endpoints (`GET /intake/:requestID`, `GET /supervisor/:requestID`, `GET /requests/:requestID/decision`, `GET /requests/:requestID/chat`) continue to work.
 
 ## Errors
 

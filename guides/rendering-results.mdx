@@ -87,7 +87,7 @@ The full `messages` array works as a timeline of the entire run.
 
 ## Web-discovered results
 
-Candidates returned by [`GET /search/:requestID/web`](/api-reference/search/web) now always land as `marketplace_listing` when a product page and price are visible; there is no separate distributor category. To turn selected candidates into a supervisor run, call [`POST /search/:requestID/handoff`](/api-reference/search/handoff) with either the mixed-channel `{ suppliers: [{ supplierID, channel }] }` payload or the legacy `{ supplierIDs, channel }` payload.
+Candidates returned by [`GET /search/:requestID/web`](/api-reference/search/web) now always land as `marketplace_listing` when a product page and price are visible; there is no separate distributor category. To turn selected candidates into a supervisor run, call [`POST /search/:requestID/handoff`](/api-reference/search/handoff) with a `suppliers: [{ supplierID, channel }]` payload. Call the same endpoint again on a live run to add more suppliers to the coordinator.
 
 ## TypeScript snippet
 

@@ -1,12 +1,14 @@
 ---
 title: "Handoff Web Suppliers to the Supervisor"
 sidebarTitle: "Handoff"
-description: "POST /search/:requestID/handoff hands the selected web-discovered suppliers to the supervisor, with per-supplier channel routing and an optional workflow policy that lets callers skip stages."
+description: "POST /search/:requestID/handoff hands the selected web-discovered suppliers to the supervisor with per-supplier channel routing. Call it again on a live run to add more suppliers."
 ---
 
 Take suppliers discovered by the parallel Exa web search and start a supervisor run for them. Unlike [`POST /search/:requestID`](/api-reference/search/start), which selects internal suppliers automatically, handoff is driven by the UI: the caller picks which supplier candidates to contact and which channel to use for each.
 
 Each supplier runs in its own child thread `<requestID>:supplier:<supplierID>`; a single coordinator awaits every child and produces one award recommendation. See [Supervisor concepts](/concepts/supervisor) for the full model.
+
+Call this endpoint again on a request whose supervisor is already running to **add more suppliers** to the live run; the coordinator spawns a child thread for each new entry and keeps waiting on every supplier before awarding.
 
 ## Endpoint
 
@@ -16,75 +18,31 @@ POST /search/:requestID/handoff
 
 ## Request body
 
-The endpoint accepts two payload shapes. Use the **mixed-channel** shape when different suppliers should be contacted over different channels, and the **legacy** shape when every supplier uses the same channel.
-
-### Mixed-channel form
-
 <ParamField body="suppliers" type="array" required>
   One entry per supplier to contact. Each entry has:
 
   - `supplierID` (string, required) — must match a candidate returned by [`GET /search/:requestID/web`](/api-reference/search/web).
   - `channel` (string, required) — `email` or `whatsapp`.
 
-  A `supplierID` may only appear once.
+  A `supplierID` may only appear once per call. When adding suppliers to a live run, only include the new `supplierID`s; already-selected suppliers are kept as-is.
 </ParamField>
 
-<ParamField body="workflowPolicy" type="object">
-  Optional. Lets callers skip stages. All flags default to `true`.
+## Example
 
-  | Flag | Effect when `false` |
-  | --- | --- |
-  | `sendRfqs` | Do not send RFQs. Each child finishes immediately. |
-  | `runQualification` | Skip the qualification stage. Every replying supplier proceeds to negotiation (nothing gates on a verdict). |
-  | `normalizeQuotes` | Skip quote normalization; the timeline will not contain a `quotes` message. |
-  | `negotiate` | Skip the negotiation round. |
-  | `recommendAward` | Do not produce an `award_recommendation` message at the end. |
-</ParamField>
-
-### Legacy (single-channel) form
-
-<ParamField body="supplierIDs" type="string[]" required>
-  IDs of the web candidates to contact. Duplicates are de-duplicated.
-</ParamField>
-
-<ParamField body="channel" type="string">
-  `email` or `whatsapp`. Defaults to `email`.
-</ParamField>
-
-<ParamField body="workflowPolicy" type="object">
-  Same as the mixed-channel form.
-</ParamField>
-
-## Examples
-
-<CodeGroup>
-
-```bash Mixed channels
+```bash
 curl -X POST http://localhost:3001/search/299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21/handoff \
   -H "Content-Type: application/json" \
   -d '{
     "suppliers": [
       { "supplierID": "SUP-webA", "channel": "email" },
       { "supplierID": "SUP-webB", "channel": "whatsapp" }
-    ],
-    "workflowPolicy": { "negotiate": false }
+    ]
   }'
 ```
-
-```bash Single channel
-curl -X POST http://localhost:3001/search/299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21/handoff \
-  -H "Content-Type: application/json" \
-  -d '{
-    "supplierIDs": ["SUP-webA", "SUP-webB"],
-    "channel": "email"
-  }'
-```
-
-</CodeGroup>
 
 ## Response
 
-### 200 — Supervisor started
+### 200 — Supervisor started or extended
 
 ```json
 {
@@ -102,13 +60,12 @@ Poll [`GET /supervisor/:requestID`](/api-reference/supervisor/get) to track the 
 
 | Status | Body | Meaning |
 | --- | --- | --- |
-| 400 | `{ "errors": [ … Zod issues … ] }` | The payload does not match either accepted shape (for example, missing `suppliers`/`supplierIDs`, unknown `channel`, or a duplicate `supplierID`). |
+| 400 | `{ "errors": [ … Zod issues … ] }` | The payload is missing `suppliers`, has an unknown `channel`, or lists a duplicate `supplierID`. |
 | 400 | `{ "error": "Unknown suppliers: SUP-xxx" }` | A `supplierID` in the payload is not present in the web search results for this request. |
 | 404 | `{ "error": "Request not found" }` | The `requestID` does not exist. |
 | 404 | `{ "error": "No web search for this request" }` | The parallel web search never started for this request, so there is nothing to hand off. |
 | 409 | `{ "error": "Request was cancelled" }` | The request was cancelled via [`POST /requests/:requestID/cancel`](/api-reference/requests/cancel). |
 | 409 | `{ "error": "Intake is not resolved yet", "status": "…" }` | Intake is still asking clarifying questions. Resolve it first. |
-| 409 | `{ "error": "Request was already handed off to the supervisor", "status": "…" }` | A supervisor run already exists for this request. |
 | 409 | `{ "error": "Supplier discovery is still running", "status": "running" }` | The web search is not finished yet. Wait for it to complete before handing off. |
 | 422 | `{ "error": "Missing contact for: <Supplier Name> (email address), <Other> (WhatsApp-capable phone number)" }` | One or more selected suppliers are unreachable on the requested channel. Fix the assignments (or pick different candidates) and retry. |
 

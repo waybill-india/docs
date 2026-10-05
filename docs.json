@@ -89,8 +89,7 @@
           {
             "group": "Supervisor",
             "pages": [
-              "api-reference/supervisor/get",
-              "api-reference/supervisor/start"
+              "api-reference/supervisor/get"
             ]
           },
           {
