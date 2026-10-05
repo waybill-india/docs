@@ -72,8 +72,7 @@ TEST_SUPPLIERS=[{"id":"test-email-1","channel":"email","address":"first@example.
 | --- | --- | --- |
 | `AGENTMAIL_API_KEY` | — | Required to use the email channel |
 | `AGENTMAIL_WEBHOOK_SECRET` | — | Svix signing secret for `POST /webhook/email` |
-| `AGENTMAIL_INBOX_ID` | — | Use an existing inbox instead of creating one |
-| `AGENTMAIL_INBOX_USERNAME` | `procurement` | Username for the shared inbox created on first use |
+| `AGENTMAIL_INBOX` | — | Full inbox address this backend owns, e.g. `dev-yourname@trywaybill.com`. The inbox is looked up on boot and created on 404, so a fresh developer address appears on first run. The email webhook drops any event whose `inbox_id` does not match this inbox, so a shared AgentMail account can split dev and prod traffic |
 | `EMAIL_LIVE_DELIVERY` | `false` | When `false`, every outbound RFQ is redirected to `EMAIL_TEST_ADDRESS` instead of the real supplier |
 | `EMAIL_TEST_ADDRESS` | — | Test recipient used while `EMAIL_LIVE_DELIVERY=false` |
 
@@ -140,8 +139,7 @@ EXA_API_KEY=exa-...
 # Email channel (optional)
 AGENTMAIL_API_KEY=am-...
 AGENTMAIL_WEBHOOK_SECRET=whsec_...
-AGENTMAIL_INBOX_ID=inbox_...
-AGENTMAIL_INBOX_USERNAME=procurement
+AGENTMAIL_INBOX=dev-yourname@trywaybill.com
 EMAIL_LIVE_DELIVERY=false
 EMAIL_TEST_ADDRESS=you@example.com
 
