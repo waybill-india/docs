@@ -24,6 +24,14 @@ When waybill-arc intake finishes, it returns a `ResolvedQuery`. This is the stru
 | `quantity.packaging` | string \| null | Packaging type, such as "tray" or "tape and reel". |
 | `confidence` | number | 0–1 confidence score from the intake agent. |
 | `unresolvedTerms` | string\[\] | Terms the agent could not resolve. |
+| `priorities` | string\[\] | Buyer priorities captured during intake (for example, `"prefer lead time under 6 weeks"`). Seed the mandate `preferences` for [buyer decisions](/concepts/buyer-decisions); defaults to `[]`. |
+| `constraints` | object \| null | Hard limits the buyer stated at intake. Seeds the mandate used by [buyer decisions](/concepts/buyer-decisions). `null` when the buyer stated no hard limits. |
+| `constraints.deliveryDeadline` | string \| null | Latest acceptable delivery date, `YYYY-MM-DD`. |
+| `constraints.maxTotalCost` | object \| null | Budget ceiling for the whole order: `{ amount, currency }` with an ISO 4217 currency code. |
+| `constraints.destination` | string \| null | Where the order is delivered. |
+| `constraints.acceptableMoq` | number \| null | Largest minimum order quantity the buyer accepts. |
+| `constraints.requirements` | string\[\] \| null | Mandatory qualification points, for example `"Authorized distributor"` or `"RoHS documentation"`. |
+| `supplierNotes` | string \| null | Free-text instructions for suppliers that no other field holds (for example, marking or document requirements). Never a budget or price. |
 | `sources` | object\[\] | Evidence sources used to build the spec. |
 | `sources[].url` | string | Source URL. |
 | `sources[].note` | string | Short description of what the source confirms. |
@@ -44,6 +52,15 @@ When waybill-arc intake finishes, it returns a `ResolvedQuery`. This is the stru
   "quantity": { "value": 2000, "unit": "units", "packaging": "tray" },
   "confidence": 0.96,
   "unresolvedTerms": [],
+  "priorities": ["Prefer lead time under 6 weeks"],
+  "constraints": {
+    "deliveryDeadline": "2026-12-15",
+    "maxTotalCost": { "amount": 5000, "currency": "USD" },
+    "destination": "Bengaluru, IN",
+    "acceptableMoq": 1000,
+    "requirements": ["Authorized distributor", "RoHS documentation"]
+  },
+  "supplierNotes": "Reels must be labelled with lot code; include CoC.",
   "sources": [
     { "url": "https://www.st.com/…", "note": "Official ST product page…" }
   ]

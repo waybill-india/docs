@@ -1,30 +1,62 @@
 ---
 title: "Supervisor: RFQs, Qualification, and Negotiation"
 sidebarTitle: "Supervisor"
-description: "Learn how the waybill-arc supervisor orchestrates RFQs, qualifies supplier quotes, negotiates counter-offers, and produces an award recommendation."
+description: "Learn how the waybill-arc supervisor orchestrates per-supplier RFQ, qualification and negotiation workflows under a coordinator that awards after every child finishes."
 ---
 
-The waybill-arc supervisor is the procurement orchestration layer. After [search](/concepts/search) selects suppliers and sends RFQs, the supervisor awaits supplier replies, qualifies incoming quotes, runs a negotiation round with counter-offers, and produces a final award recommendation.
+The waybill-arc supervisor is the procurement orchestration layer. After [search](/concepts/search) selects suppliers (or [handoff](/api-reference/search/handoff) assigns web candidates), the supervisor runs an independent workflow for each supplier and produces one final award recommendation.
+
+## Per-supplier threads under a coordinator
+
+Each selected supplier runs in its own LangGraph thread named:
+
+```
+<requestID>:supplier:<supplierID>
+```
+
+A **coordinator** thread (keyed on `<requestID>`) dispatches every child in parallel, waits until each one reaches a terminal state, and then produces one `award_recommendation` message that compares the completed workflows.
+
+Consequences of this model:
+
+- Suppliers make progress independently. A slow or unreachable supplier does not block the others.
+- Each child has its own checkpoint and lock, so a crash in one supplier's workflow does not corrupt the run. The coordinator records a `supplier_failed` marker for that supplier and still awards over the rest.
+- Channel routing is per supplier via `request.supplierChannels`, so one run can talk to some suppliers over email and others over WhatsApp.
+- If every child thread finishes before the coordinator's own state is persisted, [`GET /supervisor/:requestID`](/api-reference/supervisor/get) fabricates a stitched view from the child checkpoints so the UI still works.
+- Calling [`POST /search/:requestID/handoff`](/api-reference/search/handoff) again on a live run **adds suppliers** to the coordinator rather than failing. The new suppliers get their own child threads and the coordinator keeps waiting on every supplier before awarding.
 
 ## Supervisor lifecycle
 
-The supervisor moves through three statuses:
+The merged run moves through three statuses:
 
 | Status | Meaning |
 | --- | --- |
-| `awaiting_supplier_responses` | RFQs or counter-offers are out; waiting for suppliers to reply. |
-| `in_progress` | The run is actively processing replies or preparing the next step. |
-| `completed` | The run finished and the award recommendation is ready. |
+| `awaiting_supplier_responses` | One or more child threads are paused waiting for a supplier reply. |
+| `in_progress` | The run is actively processing replies or preparing the next stage. |
+| `completed` | Every child finished and the coordinator has recorded the award recommendation. |
 
-Supplier replies arrive via `POST /webhook` and resume the run automatically. The run may re-enter `awaiting_supplier_responses` during the negotiation counter-offer round, so you should keep polling until `status` is `completed`.
+Supplier replies arrive via `POST /webhook` and resume the affected child automatically. A run may re-enter `awaiting_supplier_responses` during the negotiation counter-offer round, so keep polling until `status` is `completed`.
+
+## Per-supplier stage order
+
+Inside one supplier's thread the stages run in a fixed order:
+
+1. `rfq` — send the RFQ on the assigned channel.
+2. `qualification` — assess the reply against the resolved query. Produces `qualification_verdicts` with `approved`, `review`, or `excluded`.
+3. `qualificationFollowUp` — only runs when the initial verdict is `review`. Sends one focused message to the supplier asking for exactly the proof or confirmation the assessment is missing, then re-runs `qualification` on the reply.
+4. `buyerQualification` — if the second assessment is still `review`, the thread pauses on a `buyerQualification` interrupt. The buyer resolves it via the [`qualify_supplier` action](/api-reference/requests/actions#qualify_supplier), and their disposition overrides the assessment. If the request ends before the buyer decides, the thread records `qualification_unresolved` and finishes.
+5. `negotiation` — only runs when the latest disposition is `approved`. An `excluded` verdict (from the assessment or from the buyer) stops the thread and is reported at award.
+6. `finish` — the thread terminates.
+
+The award prompt is explicitly forbidden from awarding a supplier marked `no reply`, `declined`, `withdrawn`, `failed`, `dropped`, `review`, or `excluded`.
 
 ## Supervisor response fields
 
-A `GET /supervisor/:requestID` response contains:
+A [`GET /supervisor/:requestID`](/api-reference/supervisor/get) response contains:
 
-- **`request`** — the full request context, including `selectedSupplierIDs`, `selections` (why each supplier was chosen), and the `resolvedQuery`.
+- **`request`** — the full request context, including `selectedSupplierIDs`, `supplierChannels` (per-supplier channel routing), `selections`, and the `resolvedQuery`.
 - **`interrupts`** — when the run is waiting, each interrupt lists which supplier IDs it is `waitingFor`.
-- **`messages`** — a timeline of the entire run. Each message has `type` (`human | ai | tool`) and a `name` that tells you what stage it belongs to.
+- **`errors`** — per-supplier failure messages recorded when a child workflow crashed. Present alongside a `supplier_failed` marker in the timeline.
+- **`messages`** — the merged timeline of every child thread, followed by the coordinator's `award_recommendation`.
 
 ## Message timeline names
 
@@ -36,16 +68,26 @@ A `GET /supervisor/:requestID` response contains:
 | `qualification` | Full qualification narrative. |
 | `qualification_verdicts` | Structured per-supplier verdicts. |
 | `counter_responses` | Replies received after counter-offers. |
-| `negotiation` | Final markdown award recommendation. |
-
-The final `negotiation` message is the markdown summary with per-supplier outcomes and the award recommendation. Render it as the result.
+| `negotiation` | Per-supplier negotiation transcript. |
+| `qualification_followup` | One follow-up message sent to a supplier whose initial verdict was `review`. |
+| `buyer_qualification` | The buyer's `approved`/`excluded` decision, recorded when they resolve a `buyerQualification` interrupt. |
+| `qualification_unresolved` | Written when the request ends before the buyer breaks a `review` tie. Terminal for that supplier. |
+| `supplier_declined` | Supplier refused the RFQ. Terminal for that supplier. |
+| `supplier_withdrawn` | Supplier pulled out mid-negotiation. Terminal for that supplier. |
+| `supplier_failed` | The supplier's child workflow crashed; recorded so the coordinator can still award. Terminal for that supplier. |
+| `supplier_no_reply` | Supplier did not respond within the waiting window. Terminal for that supplier. |
+| `buyer_dropped` | The buyer removed this supplier via [`drop_supplier`](/api-reference/requests/actions#drop_supplier). Terminal for that supplier. |
+| `request_ended` | The request was cancelled, awarded, or closed while this supplier's thread was still open. Terminal for that supplier. |
+| `award_recommendation` | The coordinator's single markdown award recommendation, appended once every child finishes. |
 
 ## Polling pattern
 
-Poll `GET /supervisor/:requestID` every 5–10 seconds after starting [search](/concepts/search). The run resumes automatically when supplier replies arrive via webhook, so your UI only needs to poll for state changes.
+Poll `GET /supervisor/:requestID` every 5–10 seconds after starting the run. Supplier replies resume the affected child automatically via webhook, so your UI only needs to poll for state changes.
 
 ## Related pages
 
 - [Get supervisor state](/api-reference/supervisor/get)
+- [Handoff to the supervisor](/api-reference/search/handoff)
+- [Buyer decisions](/concepts/buyer-decisions)
 - [Structured messages](/concepts/structured-messages)
 - [Rendering results](/guides/rendering-results)

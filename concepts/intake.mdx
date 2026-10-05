@@ -30,7 +30,13 @@ Free text is always accepted, even when `options` are provided.
 
 ## Confidence and best effort
 
-Intake tracks `confidence` on a 0–1 scale. If the agent cannot reach `CONFIDENCE_THRESHOLD` (default 0.9) after several iterations, it may return `bestEffort: true`. You should flag this in your UI so the user knows the spec may be incomplete or imprecise before proceeding to [search](/concepts/search).
+Intake tracks `confidence` on a 0–1 scale and runs up to `MAX_TOOL_ITERATIONS` tool rounds (default `15`) before stopping. If the agent cannot reach `CONFIDENCE_THRESHOLD` (default `0.9`) within that budget, it returns `bestEffort: true` with its best-below-threshold resolved query. Flag this in your UI so the user knows the spec may be incomplete before proceeding to [search](/concepts/search).
+
+If the budget runs out and the agent has nothing usable to return, [`GET /intake/:requestID`](/api-reference/intake/get) reports `status: "failed"` and `resolvedQuery: null`. Retry the request with a sharper initial query or tune `MAX_TOOL_ITERATIONS` upward.
+
+## Hard limits and supplier notes
+
+If the buyer states hard limits during intake (a delivery date, budget ceiling, destination, acceptable MOQ, or mandatory requirements), intake captures them as `constraints` on the [ResolvedQuery](/concepts/resolved-query). Free-text instructions that no structured field holds — label format, lot codes, document requirements — are recorded as `supplierNotes`. Both seed the mandate used at the [buyer decision](/concepts/buyer-decisions) stage, so intake does not have to re-ask for them later.
 
 ## Example awaiting\_answer response
 

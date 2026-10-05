@@ -1,10 +1,12 @@
 ---
 title: "Get Supervisor Run State"
 sidebarTitle: "Get Run"
-description: "GET /supervisor/:requestID polls the procurement run state until it completes. Contains quotes, qualification verdicts, and the final award recommendation."
+description: "GET /supervisor/:requestID polls the procurement run state until it completes. Contains quotes, qualification verdicts, per-supplier errors, and the final award recommendation."
 ---
 
-Poll the supervisor run to track RFQ progress, view incoming quotes, and read the final award recommendation. Call this endpoint after [`POST /search/:requestID`](/api-reference/search/start) returns a non-null `supervisor` object, then poll every 5–10 seconds until `status` is `completed`.
+Poll the supervisor run to track RFQ progress, view incoming quotes, and read the final award recommendation. Call this endpoint after [`POST /search/:requestID/handoff`](/api-reference/search/handoff) (or [`POST /search/:requestID`](/api-reference/search/start)) returns a non-null `supervisor` object, then poll every 5–10 seconds until `status` is `completed`.
+
+Each supplier runs in its own child thread under a coordinator. This endpoint returns the merged coordinator view.
 
 ## Endpoint
 
@@ -32,7 +34,11 @@ curl http://localhost:3001/supervisor/299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21
   "status": "awaiting_supplier_responses | in_progress | completed",
   "request": {
     "requestID": "…",
-    "selectedSupplierIDs": ["SUP-00142"],
+    "selectedSupplierIDs": ["SUP-00142", "SUP-00187"],
+    "supplierChannels": {
+      "SUP-00142": "email",
+      "SUP-00187": "whatsapp"
+    },
     "selections": [
       {
         "supplierID": "SUP-00142",
@@ -44,8 +50,14 @@ curl http://localhost:3001/supervisor/299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21
   },
   "next": "…internal routing hint, ignore…",
   "interrupts": [ { "waitingFor": ["SUP-00142"] } ],
+  "errors": [
+    {
+      "supplierID": "SUP-00187",
+      "message": "Supplier workflow failed. Check the Arc server logs and retry the workflow."
+    }
+  ],
   "messages": [
-    { "type": "human | ai | tool", "name": "rfq | supplier_responses | quotes | qualification | qualification_verdicts | counter_responses | negotiation | …", "content": "…" }
+    { "type": "human | ai | tool", "name": "rfq | supplier_responses | quotes | qualification | qualification_verdicts | counter_responses | negotiation | supplier_declined | supplier_withdrawn | supplier_failed | supplier_no_reply | award_recommendation", "content": "…" }
   ]
 }
 ```
@@ -54,13 +66,42 @@ curl http://localhost:3001/supervisor/299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21
   Carries why each supplier was picked so the shortlist survives a page reload. It is `[]` for runs started before selections were persisted; fall back to `selectedSupplierIDs`.
 </ResponseField>
 
+<ResponseField name="request.supplierChannels" type="object">
+  Map of `supplierID` to the channel used for that supplier (`email`, `whatsapp`, `simulator`, `voice`, or `sms`). Populated from the handoff payload and may differ per supplier for mixed-channel runs. Missing keys fall back to `request.channel`.
+</ResponseField>
+
 <ResponseField name="interrupts" type="array">
-  Lists suppliers the run is currently waiting for. Use this to show "waiting for reply" badges.
+  Lists suppliers the coordinator is currently waiting for. Use this to show "waiting for reply" badges.
+
+  A `buyerQualification` interrupt has an extra shape — `{ "waitingFor": [], "buyer": "qualification", "supplierID": "SUP-…" }` — meaning that supplier's qualification stayed in `review` after the follow-up and needs the buyer's [`qualify_supplier`](/api-reference/requests/actions#qualify_supplier) decision to unblock the thread.
+</ResponseField>
+
+<ResponseField name="errors" type="array">
+  Per-supplier failures recorded when a child workflow crashed. Each entry has `supplierID` and a human-readable `message`. The coordinator still awards over the remaining suppliers, so treat this as an in-band failure list, not a top-level run error.
 </ResponseField>
 
 <ResponseField name="messages" type="array">
-  A timeline of the run. When `status` is `completed`, the last entry with `name: "negotiation"` contains the markdown award recommendation and per-supplier outcomes.
+  A timeline of the run. Includes stage messages from every child thread merged in supplier order, followed by the coordinator's `award_recommendation` when the run completes.
 </ResponseField>
+
+## Message names
+
+The `messages` timeline includes per-stage entries (`rfq`, `supplier_responses`, `quotes`, `qualification`, `qualification_verdicts`, `counter_responses`, `negotiation`) plus **terminal supplier markers** and the coordinator's final `award_recommendation`.
+
+| Name | Meaning |
+| --- | --- |
+| `supplier_declined` | Supplier explicitly refused the RFQ. Nothing further is sent to them. |
+| `supplier_withdrawn` | Supplier pulled out mid-negotiation after initially engaging. |
+| `supplier_failed` | The supplier's child workflow crashed. The coordinator recorded a synthetic terminal state so it could still award over the remaining suppliers. The `content` is a JSON blob with `supplierIDs` and `error`. See also the top-level `errors[]` array. |
+| `supplier_no_reply` | Supplier did not respond within the waiting window. |
+| `buyer_dropped` | The buyer removed this supplier via [`drop_supplier`](/api-reference/requests/actions#drop_supplier). |
+| `request_ended` | The request was cancelled, awarded, or closed while this supplier's thread was still open. |
+| `qualification_followup` | One follow-up message the supervisor sent to a supplier whose initial qualification verdict was `review`. |
+| `buyer_qualification` | The buyer's `approved`/`excluded` decision for a review supplier, recorded when they call [`qualify_supplier`](/api-reference/requests/actions#qualify_supplier). |
+| `qualification_unresolved` | Written when the request ends before the buyer breaks a `review` tie. |
+| `award_recommendation` | The coordinator's single markdown award recommendation, appended once every child thread finishes. Render as markdown. |
+
+Render every terminal marker in the timeline. Dropping them hides supplier outcomes users need to see (for example, why a supplier is not in the award).
 
 ## Reading structured payloads
 
@@ -108,16 +149,17 @@ One verdict per selected supplier.
 ]
 ```
 
-`review` means the assessment was inconclusive or silent about that supplier. The `qualification` message holds the full narrative for a details view.
+`review` means the assessment was inconclusive or silent about that supplier. Only `approved` suppliers proceed to negotiation. A `review` verdict triggers a one-message follow-up with the supplier and a second assessment; if the second assessment is still `review`, the thread waits for the buyer to break the tie via [`qualify_supplier`](/api-reference/requests/actions#qualify_supplier). An `excluded` verdict stops the thread and is reported at award. The `qualification` message holds the full narrative for a details view.
 
 ## Errors
 
 | Status | Body | Meaning |
 | --- | --- | --- |
-| 404 | `{ "error": "Request not found" }` | The `requestID` does not exist. |
+| 404 | `{ "error": "Request not found" }` | The `requestID` has no supervisor run. |
 
 ## Related
 
 - [Supervisor Concepts](/concepts/supervisor)
 - [Structured Messages](/concepts/structured-messages)
 - [Rendering Results](/guides/rendering-results)
+- [Handoff to the Supervisor](/api-reference/search/handoff)

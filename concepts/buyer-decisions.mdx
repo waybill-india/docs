@@ -1,0 +1,82 @@
+---
+title: "Buyer Decisions: Mandate, Offers, and the Decision Package"
+sidebarTitle: "Buyer Decisions"
+description: "Learn how waybill-arc keeps the buyer as the award authority: a canonical request harness holds the mandate, versioned offers, and evidence, and exposes a decision package the buyer acts on."
+---
+
+Once RFQs and negotiation are underway, the buyer needs a single, consistent view they can act on. waybill-arc keeps that view in a **canonical request harness** that runs alongside the [supervisor](/concepts/supervisor). The harness owns durable facts — mandate, offers, evidence, decisions — and exposes them as a **decision package** the buyer's UI reads and acts on.
+
+The buyer remains the award authority. Deadline expiry, supplier silence, agent failure, and exhausted runtime do not close a request. Only three buyer actions do: accept an exact offer version, close without award, or cancel.
+
+## The mandate
+
+The mandate is the buyer's brief for one request. It has a `version` that increments on every buyer edit.
+
+| Field | Meaning |
+| --- | --- |
+| `product`, `quantity`, `acceptableMoq` | What is being bought and how much. |
+| `destination`, `deliveryDeadline` | Where and when. `deliveryDeadline` is separate from the supplier response deadline. |
+| `initialResponseDeadline` | How long to wait for a first supplier reply. Passing this deadline stops waiting; it never closes the request or disqualifies a supplier already in conversation. |
+| `maxTotalCost` | Optional total-cost limit as `{ amount, currency }`. |
+| `qualificationRequirements` | Mandatory qualification points, for example "Authorized distributor". |
+| `preferences` | Ordered list of soft preferences that drive ranking. Preferences never override mandatory constraints. |
+
+Mandate revisions are re-steering, not restarts. Deadlines and preferences change without voiding live work; changing a material constraint bumps the version and forces the supervisor to reevaluate.
+
+## Offer versions
+
+Every supplier reply is folded into a versioned `OfferVersion` with a `qualificationStatus` of `approved`, `in_review`, or `excluded`, plus `evidenceIDs` that cite the records backing it. The decision package returns every current offer with:
+
+- `constraintResults` — `pass`, `fail`, or `unknown` for each mandate constraint.
+- `missingFields` — offer fields the supplier has not stated.
+- `gaps` — human-readable summary of what the buyer would be overriding by accepting the offer as-is.
+
+## The decision package
+
+Fetch it via [`GET /requests/:requestID/decision`](/api-reference/requests/decision). It contains:
+
+- `status`, `version` — request state and monotonic snapshot version.
+- `mandate` — the current buyer mandate.
+- `options` — every offer with its comparison and gaps, ordered by the recommendation.
+- `openIssues` — things the buyer must decide (a supplier in `review`, an expiring deadline, an unreachable supplier).
+- `recommendation` — the supervisor's latest proposal: ranked `offerIDs`, buyer-only `questions`, per-supplier `objectives`, and a `rationale`.
+- `decision` — set once the buyer accepts, closes, or cancels; otherwise `null`.
+- `dropped` — supplier IDs the buyer removed.
+- `buyerNotes` — per-supplier instructions the buyer added via `renegotiate`.
+- `costUSD` — live model cost for this request.
+
+## Buyer actions
+
+Apply one action at a time via [`POST /requests/:requestID/actions`](/api-reference/requests/actions). The response is the refreshed decision package.
+
+| Action | Effect |
+| --- | --- |
+| `accept_offer` | Award to a specific offer version. Rejected if a newer version exists. Never places an order or takes payment. |
+| `close_without_award` | Close the request with a recorded reason. |
+| `cancel` | Cancel the request. Prefer [`POST /requests/:requestID/cancel`](/api-reference/requests/cancel), which also works before the harness snapshot exists. |
+| `continue` | Explicitly keep the request open (defer a supervisor question). |
+| `extend_deadline` | Move the supplier response deadline. Only affects suppliers with no reply yet. |
+| `drop_supplier` | Remove a supplier from the run. Their thread ends with a `buyer_dropped` marker. |
+| `renegotiate` | Record a per-supplier instruction that steers the next negotiation round. |
+| `set_preferences` | Replace the mandate's `preferences` list. Increments the mandate version and re-ranks offers. |
+| `qualify_supplier` | Break a `review` tie for a supplier waiting on a `buyerQualification` interrupt. The buyer's disposition overrides the assessment. |
+
+## Cancellation
+
+[`POST /requests/:requestID/cancel`](/api-reference/requests/cancel) stops a request at any stage: during intake, during sourcing, or after the harness snapshot exists. Once a request is cancelled, every write endpoint returns `409 { "error": "Request was cancelled" }`. Read endpoints continue to work.
+
+## Buyer chat
+
+[`POST /requests/:requestID/chat`](/api-reference/requests/chat) drives an assistant that answers questions grounded in the decision package. It can update `preferences` (re-ranking offers) or start one more negotiation round with a specific supplier when the buyer asks for those in their own words. It cannot accept, drop, close, or cancel — those go through buyer actions.
+
+## Cost accounting
+
+`costUSD` on the decision package is the live total model cost for this request, aggregated from every model call. It stays accurate after the request ends.
+
+## Related pages
+
+- [Get the decision package](/api-reference/requests/decision)
+- [Apply a buyer decision](/api-reference/requests/actions)
+- [Cancel a request](/api-reference/requests/cancel)
+- [Buyer chat](/api-reference/requests/chat)
+- [Supervisor](/concepts/supervisor)

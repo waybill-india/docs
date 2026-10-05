@@ -53,7 +53,28 @@ When the Exa search completes, candidates have one of two `kind` values:
 | `marketplace_listing` | Buy directly from a marketplace. | `productUrl`, `price` |
 | `quotation_supplier` | Reach out for a quote. | `contactEmail`, `contactPhone`, `website` |
 
-Any unverified field may be `null`. Web candidates are **not** part of the supervisor or RFQ flow. They are an independent outreach list you can present to the user alongside the internal supplier results.
+Any unverified field may be `null`. Web-discovered results are surfaced as marketplace listings when a product page and price are visible; there is no separate distributor category on the response.
+
+By default, web candidates are an **independent outreach list** you can present to the user alongside the internal supplier results. To turn selected candidates into a supervisor run, call [`POST /search/:requestID/handoff`](/api-reference/search/handoff).
+
+## Handing off web candidates
+
+`POST /search/:requestID/handoff` takes a `suppliers` array where each entry assigns a channel per supplier for mixed-channel runs (for example, some over email, others over WhatsApp):
+
+```json
+{
+  "suppliers": [
+    { "supplierID": "SUP-webA", "channel": "email" },
+    { "supplierID": "SUP-webB", "channel": "whatsapp" }
+  ]
+}
+```
+
+The supervisor then runs one child thread per supplier under a coordinator; see [Supervisor](/concepts/supervisor) for the model.
+
+Call the endpoint again on a live run to **add more suppliers** to the running coordinator; already-selected suppliers are kept as-is and the coordinator waits on every supplier before awarding.
+
+If any assigned supplier is unreachable on the requested channel (no email address, or no WhatsApp-capable phone number), the handoff returns `422` with an error text of the form `Missing contact for: <Supplier Name> (email address), …`.
 
 ## Example web candidate
 
@@ -77,4 +98,5 @@ Any unverified field may be `null`. Web candidates are **not** part of the super
 
 - [Start search](/api-reference/search/start)
 - [Web search results](/api-reference/search/web)
+- [Handoff to the supervisor](/api-reference/search/handoff)
 - [Supervisor](/concepts/supervisor)

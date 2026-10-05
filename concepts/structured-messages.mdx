@@ -86,7 +86,8 @@ A `review` disposition means the assessment was inconclusive or silent about tha
 1. Walk the `messages` array and collect the last `quotes` and `qualification_verdicts` entries.
 2. Parse the JSON array from `content` starting at the first `[`.
 3. Join the two arrays by `supplierID` to build a quote comparison table.
-4. Use the `negotiation` message (the last message in the timeline) as the markdown award recommendation.
+4. Also render the four terminal supplier markers (`supplier_declined`, `supplier_withdrawn`, `supplier_failed`, `supplier_no_reply`) so suppliers that dropped out of the run stay visible. See [Rendering Results](/guides/rendering-results#terminal-supplier-markers) for the recommended labels.
+5. Use the coordinator's `award_recommendation` message (appended once every supplier's child thread finishes) as the markdown award recommendation.
 
 ## Related pages
 

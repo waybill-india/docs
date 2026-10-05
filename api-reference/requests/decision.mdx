@@ -1,0 +1,162 @@
+---
+title: "Get the Buyer Decision Package"
+sidebarTitle: "Decision Package"
+description: "GET /requests/:requestID/decision returns the current offers ranked against the buyer mandate, the supervisor's recommendation and questions, open issues, and live request cost."
+---
+
+Fetch the canonical buyer view of a request: every current offer with its comparison against the buyer's mandate, the supervisor's recommendation and open questions, any open issues, the buyer's decision so far, and the request's live model cost. Poll it whenever the buyer's decision screen is open; act on it via [`POST /requests/:requestID/actions`](/api-reference/requests/actions).
+
+## Endpoint
+
+```http
+GET /requests/:requestID/decision
+```
+
+## Request
+
+<CodeGroup>
+
+```bash cURL
+curl http://localhost:3001/requests/299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21/decision
+```
+
+</CodeGroup>
+
+## Response
+
+### 200 — Decision package
+
+```json
+{
+  "requestID": "299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21",
+  "status": "open",
+  "version": 12,
+  "mandate": {
+    "version": 3,
+    "product": "STM32F103C8T6 microcontroller",
+    "quantity": 2000,
+    "acceptableMoq": 1000,
+    "destination": "Bengaluru, IN",
+    "deliveryDeadline": "2026-12-15T00:00:00.000Z",
+    "initialResponseDeadline": "2026-10-05T00:00:00.000Z",
+    "maxTotalCost": { "amount": 5000, "currency": "USD" },
+    "qualificationRequirements": ["Authorized distributor", "RoHS documentation"],
+    "preferences": ["Prefer lead time under 6 weeks", "Prefer tape and reel packaging"]
+  },
+  "options": [
+    {
+      "offerID": "offer_01j…",
+      "missingFields": ["deliveryDate"],
+      "constraintResults": {
+        "quantity": "pass",
+        "unitPrice": "pass",
+        "totalCost": "pass",
+        "deliveryDeadline": "unknown"
+      },
+      "gaps": ["Delivery date not stated"],
+      "offer": {
+        "offerID": "offer_01j…",
+        "supplierID": "SUP-00142",
+        "version": 2,
+        "quantity": 2000,
+        "moq": 1000,
+        "unitPrice": { "amount": 1.87, "currency": "USD" },
+        "totalCost": { "amount": 3740, "currency": "USD" },
+        "deliveryDate": null,
+        "leadTime": "6 weeks",
+        "notes": "Authorized distributor",
+        "qualificationStatus": "approved",
+        "evidenceIDs": ["ev_01j…"]
+      }
+    }
+  ],
+  "openIssues": [
+    "SUP-00187 qualification is in review — buyer decision needed"
+  ],
+  "recommendation": {
+    "recommendation": {
+      "offerIDs": ["offer_01j…"],
+      "rationale": "Only approved offer within budget"
+    },
+    "questions": [
+      "Is 8-week lead time acceptable if the price is 10% lower?"
+    ],
+    "rationale": "One approved offer meets all mandatory constraints…",
+    "objectives": [
+      { "supplierID": "SUP-00142", "objective": "Ask for a firm delivery date" }
+    ]
+  },
+  "decision": null,
+  "dropped": ["SUP-00190"],
+  "buyerNotes": {
+    "SUP-00142": "Push for tape and reel"
+  },
+  "costUSD": 0.42
+}
+```
+
+<ResponseField name="status" type="string">
+  `open`, `awarded`, `closed`, or `cancelled`. A request stays `open` until the buyer explicitly ends it; deadline expiry, silence, or agent failure do not close it.
+</ResponseField>
+
+<ResponseField name="version" type="number">
+  Monotonically increasing snapshot version. Every event increments it. Use it to detect stale local state.
+</ResponseField>
+
+<ResponseField name="mandate" type="object">
+  The current buyer mandate. `version` increments on every buyer edit (`set_preferences`, `extend_deadline`, and other material changes).
+</ResponseField>
+
+<ResponseField name="options" type="array">
+  Every current offer with its comparison against the mandate:
+
+  - `constraintResults` — `pass`, `fail`, or `unknown` for each mandate constraint.
+  - `missingFields` — offer fields the supplier has not stated.
+  - `gaps` — human-readable summary of what the buyer would be overriding by accepting this offer as-is.
+  - `offer` — the offer version itself; `qualificationStatus` is `approved`, `in_review`, or `excluded`, and `evidenceIDs` cite the records that back it.
+
+  Options are already ordered by the recommendation.
+</ResponseField>
+
+<ResponseField name="openIssues" type="string[]">
+  Everything the supervisor flagged for the buyer: reviewers awaiting a decision, deadlines about to expire, unreachable suppliers, unresolved qualification points.
+</ResponseField>
+
+<ResponseField name="recommendation" type="object | null">
+  The supervisor's latest proposal:
+
+  - `recommendation.offerIDs` — offers ranked best-first, or `null` when no offer is viable yet.
+  - `questions` — questions only the buyer can answer; surface them in the chat panel.
+  - `rationale` — why this recommendation was made.
+  - `objectives` — per-supplier next steps the supervisor would negotiate for.
+
+  `null` when no proposal has been recorded yet.
+</ResponseField>
+
+<ResponseField name="decision" type="object | null">
+  Set once the buyer accepts an offer, closes without award, or cancels. Otherwise `null`.
+</ResponseField>
+
+<ResponseField name="dropped" type="string[]">
+  Supplier IDs the buyer removed from the run. Nothing further is sent to them.
+</ResponseField>
+
+<ResponseField name="buyerNotes" type="object">
+  Per-supplier instructions the buyer added via `renegotiate`. The supervisor uses them to steer the next round.
+</ResponseField>
+
+<ResponseField name="costUSD" type="number">
+  Live total model cost for this request in USD. Continues to be accurate after the request ends.
+</ResponseField>
+
+## Errors
+
+| Status | Body | Meaning |
+| --- | --- | --- |
+| 404 | `{ "error": "Request not found" }` | The `requestID` has no canonical request record. |
+
+## Related
+
+- [Apply a Buyer Decision](/api-reference/requests/actions)
+- [Buyer Chat](/api-reference/requests/chat)
+- [Buyer Decisions](/concepts/buyer-decisions)
