@@ -92,6 +92,13 @@
             ]
           },
           {
+            "group": "Browser Profiles",
+            "pages": [
+              "api-reference/browser/overview",
+              "api-reference/browser/profiles"
+            ]
+          },
+          {
             "group": "Webhooks",
             "pages": [
               "api-reference/webhooks/supplier",

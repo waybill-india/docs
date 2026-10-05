@@ -1,0 +1,82 @@
+---
+title: "List Browser Profiles (GET /browser/profiles)"
+sidebarTitle: "List Profiles"
+description: "GET /browser/profiles lists Browser Use profiles, newest-used first, with each profile's connector registry claim when one exists."
+---
+
+List the Browser Use profiles available to this deployment, merged with the connector registry. Use this to audit which tenants have connected accounts and which profiles hold login state for which domains.
+
+The route requires `ARC_API_KEY` via `Authorization: Bearer` or `X-API-Key`. See [authentication](/api-reference/browser/overview#authentication).
+
+## Request
+
+`GET /browser/profiles`
+
+No parameters.
+
+```bash
+curl http://localhost:3001/browser/profiles \
+  -H "Authorization: Bearer $ARC_API_KEY"
+```
+
+## Response
+
+### 200 — Profiles
+
+Profiles are sorted by most recently used first. The route pages through the Browser Use profile list, returning up to 500 profiles.
+
+```json
+{
+  "profiles": [
+    {
+      "id": "prof_…",
+      "name": "client-42/amazon",
+      "userId": "client-42:amazon",
+      "lastUsedAt": "2026-09-28T11:02:44.000Z",
+      "createdAt": "2026-09-05T08:15:00.000Z",
+      "updatedAt": "2026-09-28T11:02:44.000Z",
+      "cookieDomains": ["amazon.in"],
+      "connection": {
+        "userId": "client-42",
+        "site": "amazon",
+        "status": "connected"
+      }
+    }
+  ],
+  "totalItems": 1
+}
+```
+
+<ResponseField name="profiles" type="array">
+  Browser Use profiles, newest-used first. Unset fields are `null`.
+</ResponseField>
+
+<ResponseField name="profiles[].id" type="string">
+  Browser Use profile ID. Agent runs pass this to open a browser with the profile's login state.
+</ResponseField>
+
+<ResponseField name="profiles[].cookieDomains" type="string[] | null">
+  Domains the profile holds cookies for, as reported by Browser Use.
+</ResponseField>
+
+<ResponseField name="profiles[].connection" type="object | null">
+  The connector registry claim for this profile: `userId`, `site`, and a `status` of `pending` or `connected`. `null` when the profile is not claimed by any tenant.
+</ResponseField>
+
+<ResponseField name="totalItems" type="number">
+  Total profile count reported by Browser Use, which can exceed the number returned.
+</ResponseField>
+
+## Errors
+
+| Status | Body | Meaning |
+| --- | --- | --- |
+| 401 | `{ "error": { "message": "Unauthorized — provide the API key via \"Authorization: Bearer <key>\" or \"X-API-Key\"." } }` | Missing or wrong `ARC_API_KEY`. |
+| 503 | `{ "error": "ARC_API_KEY is not configured — browser, purchase, settings and vapi routes are disabled" }` | `ARC_API_KEY` is unset. |
+| 503 | `{ "error": "BROWSER_USE_API_KEY is not configured" }` | `BROWSER_USE_API_KEY` is unset. |
+| 500 | `{ "error": "…" }` | Browser Use API error while listing profiles. |
+
+## Related
+
+- [Browser profiles overview](/api-reference/browser/overview)
+- [Database setup](/configuration/database)

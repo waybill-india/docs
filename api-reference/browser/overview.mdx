@@ -1,0 +1,39 @@
+---
+title: "Browser Profiles Overview"
+sidebarTitle: "Overview"
+description: "Browser Use profiles store persistent login state for agent browser runs. The connector registry maps a user and site to a profile ID, never credentials."
+---
+
+waybill-arc drives remote browsers through Browser Use Cloud. Persistent login state lives in named Browser Use profiles: a browser run that passes a profile ID opens the site already logged in. Use the `/browser` routes to inspect which profiles exist and how they map to your tenants.
+
+## Profiles and the connector registry
+
+A profile is cookie and login state stored on Browser Use's side, identified by a profile ID. The connector registry (the `browser_profiles` table) maps `(userId, site)` to a profile ID with a status of `pending` or `connected`. Agent runs that need an authenticated session for a tenant resolve the profile by `userId` and `site`. When no connected profile exists, the run fails with an account-not-connected error instead of attempting a login.
+
+<Note>
+  The database stores only profile IDs. Raw cookies and passwords never touch waybill-arc storage. Credentials stay between the user and the remote browser.
+</Note>
+
+## Authentication
+
+The `/browser/*` routes require the `ARC_API_KEY` from your environment. Send it either way:
+
+```bash
+curl -H "Authorization: Bearer $ARC_API_KEY" …
+# or
+curl -H "X-API-Key: $ARC_API_KEY" …
+```
+
+Requests with a missing or wrong key return `401`. When `ARC_API_KEY` is not configured, the routes return `503` with `ARC_API_KEY is not configured — browser, purchase, settings and vapi routes are disabled`. When `BROWSER_USE_API_KEY` is not configured, the routes return `503` with `BROWSER_USE_API_KEY is not configured`. See [Environment variables](/configuration/environment#browser-automation-browser-use).
+
+## Endpoints
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/browser/profiles` | List Browser Use profiles with their connector registry claims |
+
+## Related
+
+- [List browser profiles](/api-reference/browser/profiles)
+- [Environment variables](/configuration/environment)
+- [Database setup](/configuration/database)
