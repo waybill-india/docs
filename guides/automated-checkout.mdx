@@ -1,0 +1,153 @@
+---
+title: "Automated Web Checkout with AgentCard"
+sidebarTitle: "Automated checkout"
+description: "Let waybill-arc buy from a web store with a single-use AgentCard virtual card driven by Browser Use. Learn the two-run flow, spending limits, and setup."
+---
+
+waybill-arc can complete a web checkout for you. A Browser Use agent fills the cart and checkout form. waybill-arc then pays with a single-use [AgentCard](https://docs.agentcard.sh) virtual card that is locked to the exact order total. Use automated checkout when a supplier sells through an online store and you want waybill-arc to place the order instead of sending an RFQ.
+
+You can start a purchase in two ways:
+
+- **Ad-hoc:** call [`POST /purchase`](/api-reference/purchase/start) with a checkout URL or a free-text task.
+- **From a resolved request:** call [`POST /purchase/request/:requestID`](/api-reference/purchase/from-request) to buy what a resolved intake request asks for.
+
+## Prerequisites
+
+- A Browser Use Cloud API key in `BROWSER_USE_API_KEY`.
+- `ARC_API_KEY` set. The `/browser`, `/purchase`, and `/settings` routes return `503` when it is unset.
+- AgentCard client credentials and a member email in `AGENTCARD_CLIENT_ID`, `AGENTCARD_CLIENT_SECRET`, and `AGENTCARD_MEMBER_EMAIL`. The `/purchase` routes return `503` until all three are set.
+- Migrations applied with `npm run migrate`. See [Database setup](/configuration/database).
+
+See [Environment variables](/configuration/environment#browser-automation-and-checkout) for every related setting.
+
+## Set up AgentCard
+
+<Steps>
+  <Step title="Connect the AgentCard member">
+    Run the setup script once. It validates your client credentials, connects the member in `AGENTCARD_MEMBER_EMAIL`, records consent, and saves the token pair in the `agentcard_connections` table. The tokens refresh automatically after that.
+
+    ```bash
+    npm run agentcard:setup
+    ```
+
+    In the sandbox, the script verifies with the default code `111111`. For production, pass the verification code you received as the first argument:
+
+    ```bash
+    npm run agentcard:setup -- 482913
+    ```
+  </Step>
+  <Step title="Attach a funding card">
+    Run the attach script. It prints an attach URL if no funding card is active yet. Open the URL and enter the funding card. Card creation works once the attachment is active.
+
+    ```bash
+    npm run agentcard:attach
+    ```
+  </Step>
+  <Step title="Save a default shipping address">
+    Call [`PUT /settings`](/api-reference/settings/update) so the agent knows where to ship. Without an address, the agent uses addresses already saved on a signed-in account, or fails the purchase if the checkout requires one.
+  </Step>
+</Steps>
+
+<Note>
+  Sandbox AgentCard numbers are not on real card networks. Live checkout pages only approve cards issued with production AgentCard credentials.
+</Note>
+
+## How a purchase runs
+
+Each purchase runs two Browser Use agent runs in the same browser session. A new card is minted between them.
+
+<Steps>
+  <Step title="Discover the total">
+    The first run adds the item to the cart and fills in the checkout details. It stops at the payment form and reports the exact final total, merchant, and payment page domain. The purchase status is `discovering_price`.
+  </Step>
+  <Step title="Mint a card locked to that amount">
+    waybill-arc checks the total against your limits:
+
+    - The total must not exceed `AGENTCARD_MAX_AMOUNT_CENTS` (default `100000`, or $1,000).
+    - If you pass `expectedAmountCents`, the total must fall within ±5% of it.
+    - The payment page must be on the checkout URL's site or on a known payment host such as Stripe.
+
+    If every check passes, waybill-arc creates a single-use AgentCard locked to that exact amount and merchant. The status becomes `card_created`.
+  </Step>
+  <Step title="Pay in the same session">
+    The second run continues in the same session and submits payment. The status is `paying`. The card number and CVC are bound to the run as run-scoped secrets. Browser Use types them into the form, so they never appear in any prompt. Only the expiry and last four digits appear in the task text.
+  </Step>
+</Steps>
+
+### How success is decided
+
+waybill-arc does not trust the agent's own report. After the payment run, it polls AgentCard until the card closes with reason `used`. Only then does the purchase move to `succeeded`. If the agent reports success but the card was never charged, the purchase is `failed` with the error `agent reported success but the card was never charged`.
+
+### Card cleanup and orphaned purchases
+
+- waybill-arc always closes the card when the run ends, whether it succeeded or failed.
+- If the server restarts mid-purchase, the purchase is left in a non-terminal state. waybill-arc reconciles these orphans at startup and every 10 minutes. It also reconciles them when you call `GET /purchase/:purchaseId` or `GET /purchase/request/:requestID`. A purchase with no update for 30 minutes has its card closed and is marked `failed` with the error `orchestrator restarted mid-purchase (orphaned)`.
+- Card credentials are never stored, logged, or returned by the API.
+
+### One purchase per request
+
+A request can have only one purchase that is in flight or has succeeded. A second purchase for the same `requestId`, including two concurrent calls, returns `409` with the existing `purchaseId`, `status`, and `confirmation`. You can retry after a purchase has `failed`.
+
+## Status values
+
+Poll `GET /purchase/:purchaseId` until the status is terminal. Use `liveViewUrl` to watch the browser while the purchase runs.
+
+| Status | Meaning |
+| --- | --- |
+| `pending` | Purchase accepted and queued |
+| `discovering_price` | First run is filling the cart and checkout |
+| `card_created` | Total passed the checks and a card was minted |
+| `paying` | Second run is submitting payment |
+| `succeeded` | AgentCard confirmed the card was used |
+| `failed` | Purchase stopped. Read `error` for the reason |
+
+## Signing in to the store
+
+Some stores require an account. You have two options:
+
+- **Browser profile:** pass `userId` and `site` (or `profileId`) to reuse a Browser Use profile captured through the `/browser` login routes. Call `GET /browser/profiles` to list available profiles and which `userId` and `site` they are connected to.
+- **Inline credentials:** pass a `login` object with `email` and an optional `password`. `login` requires `checkoutUrl`. The password is bound as a secret scoped to the checkout site's domain. You cannot combine `login` with `userId`, `site`, or `profileId`.
+
+```json
+{
+  "checkoutUrl": "https://shop.example.com/products/stm32f103c8t6",
+  "login": {
+    "email": "purchasing@your-inbox.agentmail.to"
+  }
+}
+```
+
+### Automatic email OTP
+
+If `login.email` is an AgentMail inbox that your `AGENTMAIL_API_KEY` can read, waybill-arc handles emailed sign-in codes for you. When the store sends a code, the agent pauses. waybill-arc polls the inbox for up to 2 minutes, extracts the code, and resumes in the same session. This also covers passwordless email-code logins, which is why `password` is optional.
+
+For any other email address, a purchase that hits an OTP prompt fails with the store's request in `error`.
+
+## Example
+
+```bash
+curl -X POST http://localhost:3001/purchase \
+  -H "Authorization: Bearer $ARC_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "checkoutUrl": "https://shop.example.com/products/stm32f103c8t6",
+    "task": "Buy 10 units of STM32F103C8T6.",
+    "expectedAmountCents": 4250
+  }'
+```
+
+```json
+{ "purchaseId": "8f0f6c2e-5d0b-4a8e-9f57-2a1d3c4b5e6f", "status": "pending" }
+```
+
+```bash
+curl http://localhost:3001/purchase/8f0f6c2e-5d0b-4a8e-9f57-2a1d3c4b5e6f \
+  -H "Authorization: Bearer $ARC_API_KEY"
+```
+
+## Related pages
+
+- [POST /purchase](/api-reference/purchase/start)
+- [POST /purchase/request/:requestID](/api-reference/purchase/from-request)
+- [GET /settings](/api-reference/settings/get) and [PUT /settings](/api-reference/settings/update)
+- [Environment variables](/configuration/environment)

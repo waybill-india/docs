@@ -1,0 +1,76 @@
+---
+title: "Update Settings"
+sidebarTitle: "Update settings"
+description: "PUT /settings saves the default shipping address that the automated checkout agent enters at checkout."
+---
+
+Use `PUT /settings` to save the default shipping address. The [automated checkout](/guides/automated-checkout) agent enters this address exactly as written, or selects it if the signed-in account already has it saved. The call replaces any existing address.
+
+## Authentication
+
+Send `ARC_API_KEY` as `Authorization: Bearer <key>` or `X-API-Key: <key>`.
+
+## Request
+
+`PUT /settings`
+
+<ParamField body="shippingAddress" type="object" required>
+  <Expandable title="properties">
+    <ParamField body="name" type="string" required>
+      Recipient name, up to 120 characters. Also used as the name on the card.
+    </ParamField>
+    <ParamField body="line1" type="string" required>
+      Street address, up to 240 characters.
+    </ParamField>
+    <ParamField body="line2" type="string | null">
+      Apartment, suite, or unit, up to 240 characters.
+    </ParamField>
+    <ParamField body="city" type="string" required>
+      City, up to 120 characters.
+    </ParamField>
+    <ParamField body="state" type="string" required>
+      State or region, up to 120 characters.
+    </ParamField>
+    <ParamField body="postalCode" type="string" required>
+      Postal code, up to 20 characters.
+    </ParamField>
+    <ParamField body="country" type="string" required>
+      Country, up to 120 characters.
+    </ParamField>
+    <ParamField body="phone" type="string | null">
+      Phone number, up to 32 characters.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+```bash
+curl -X PUT http://localhost:3001/settings \
+  -H "Authorization: Bearer $ARC_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "shippingAddress": {
+      "name": "Waybill Receiving",
+      "line1": "500 Market St",
+      "line2": "Suite 200",
+      "city": "San Francisco",
+      "state": "CA",
+      "postalCode": "94105",
+      "country": "US",
+      "phone": "+14155550100"
+    }
+  }'
+```
+
+## Response
+
+<ResponseField name="shippingAddress" type="object">
+  The saved address. Empty optional fields are returned as `null`.
+</ResponseField>
+
+## Errors
+
+| Status | Body |
+| --- | --- |
+| 400 | `{ "errors": [...] }` |
+| 401 | Missing or invalid API key |
+| 503 | `ARC_API_KEY` is not configured |

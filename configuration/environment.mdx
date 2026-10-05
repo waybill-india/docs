@@ -1,7 +1,7 @@
 ---
 title: "Environment Variables and App Configuration"
 sidebarTitle: "Environment"
-description: "Configure waybill-arc with environment variables for LLMs, Postgres, channels, and optional tracing and web search."
+description: "Configure waybill-arc with environment variables for LLMs, Postgres, channels, and optional tracing, web search, and automated checkout."
 ---
 
 waybill-arc reads its configuration from a `.env` file in the repo root, validated by `src/config.ts`. Set the required keys for LLM calls and database connectivity, then add optional variables to tune agent behavior, enable channels, or wire observability.
@@ -54,6 +54,28 @@ waybill-arc reads its configuration from a `.env` file in the repo root, validat
 | `VAPI_WEBHOOK_SECRET` | — | Shared secret sent back as `x-waybill-signature` |
 | `VAPI_SMS_PHONE_NUMBER_ID` | — | SMS-enabled US Twilio number imported into Vapi |
 
+## Browser automation and checkout
+
+These variables enable the `/browser`, `/purchase`, and `/settings` routes. See [Automated checkout](/guides/automated-checkout).
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `ARC_API_KEY` | — | Protects `/browser`, `/purchase`, and `/settings`. Callers send it as `Authorization: Bearer <key>` or `X-API-Key`. When unset, those routes return `503`. Replaces `BROWSER_API_KEY` |
+| `BROWSER_USE_API_KEY` | — | Browser Use Cloud key used for login capture and checkout runs |
+| `AGENTCARD_CLIENT_ID` | — | AgentCard client ID. Set all three `AGENTCARD_*` credentials or none |
+| `AGENTCARD_CLIENT_SECRET` | — | AgentCard client secret |
+| `AGENTCARD_MEMBER_EMAIL` | — | Email of the AgentCard member whose funding card pays for purchases |
+| `AGENTCARD_MAX_AMOUNT_CENTS` | `100000` | Hard ceiling for a single purchase, in US cents. Minimum `100` |
+| `AGENTCARD_EXTRA_PAYMENT_DOMAINS` | `stripe.com,checkout.stripe.com,js.stripe.com` | Comma-separated payment hosts allowed in addition to the checkout URL's site |
+| `AGENTCARD_API_BASE_URL` | `https://api.agentcard.sh` | AgentCard API base URL |
+
+After setting the AgentCard credentials, connect the member and attach a funding card:
+
+```sh
+npm run agentcard:setup    # connect the member and save tokens
+npm run agentcard:attach   # print a URL to attach a funding card
+```
+
 ## Example `.env`
 
 ```sh
@@ -86,6 +108,14 @@ VAPI_PHONE_NUMBER_ID=phone_...
 VAPI_WEBHOOK_URL=https://your-host/webhook/vapi
 VAPI_WEBHOOK_SECRET=shared-secret
 VAPI_SMS_PHONE_NUMBER_ID=phone_sms_...
+
+# Browser automation and checkout (optional)
+ARC_API_KEY=your-api-key
+BROWSER_USE_API_KEY=bu_...
+AGENTCARD_CLIENT_ID=...
+AGENTCARD_CLIENT_SECRET=...
+AGENTCARD_MEMBER_EMAIL=purchasing@example.com
+AGENTCARD_MAX_AMOUNT_CENTS=100000
 ```
 
 See also:
@@ -93,3 +123,4 @@ See also:
 - [Database setup](/configuration/database)
 - [Tracing with Langfuse](/configuration/tracing)
 - [Channels and messaging](/guides/channels)
+- [Automated checkout](/guides/automated-checkout)

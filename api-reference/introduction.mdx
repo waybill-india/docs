@@ -1,12 +1,20 @@
 ---
 title: "API Reference Overview"
 sidebarTitle: "Introduction"
-description: "Overview of the waybill-arc procurement agent API: base URLs, JSON bodies, no auth, and the 10 endpoints that move a request from intake to award."
+description: "Overview of the waybill-arc procurement agent API: base URLs, authentication, and the endpoints that move a request from intake to award and checkout."
 ---
 
 waybill-arc is a procurement agent API that turns a free-text purchase request into a structured part spec, finds suppliers, and negotiates quotes. This reference covers every endpoint you need to start a request, answer clarifying questions, discover suppliers, and poll for the final award recommendation.
 
-All request and response bodies are JSON. There is no authentication on endpoints. The production deployment is currently behind Vercel Deployment Protection and returns 401, so use the local dev server for integration work.
+All request and response bodies are JSON. Most endpoints have no authentication. The `/browser`, `/purchase`, and `/settings` routes require `ARC_API_KEY`. The production deployment is currently behind Vercel Deployment Protection and returns 401, so use the local dev server for integration work.
+
+## Authentication
+
+Send `ARC_API_KEY` on every `/browser`, `/purchase`, and `/settings` call, either as `Authorization: Bearer <key>` or as `X-API-Key: <key>`. A missing or wrong key returns `401`. If `ARC_API_KEY` is unset on the server, those routes return `503` and never run unauthenticated.
+
+```bash
+curl http://localhost:3001/settings -H "Authorization: Bearer $ARC_API_KEY"
+```
 
 ## Base URLs
 
@@ -38,6 +46,13 @@ Show loading states and poll `GET /supervisor/:requestID` every 5–10 seconds a
 | GET | `/search/:requestID/web` | Poll web supplier candidates |
 | GET | `/supervisor/:requestID` | Poll procurement run state |
 | POST | `/supervisor` | Internal: start a run with an explicit payload |
+| POST | `/purchase` | Start an ad-hoc automated checkout |
+| POST | `/purchase/request/:requestID` | Purchase what a resolved request asks for |
+| GET | `/purchase/request/:requestID` | Latest purchase for a request |
+| GET | `/purchase/:purchaseId` | Poll purchase status |
+| GET | `/settings` | Read the default shipping address |
+| PUT | `/settings` | Save the default shipping address |
+| GET | `/browser/profiles` | List Browser Use profiles and their connections |
 | POST | `/webhook` | Internal: supplier gateway resume hook |
 | POST | `/webhook/vapi` | Internal: Vapi voice or SMS resume hook |
 

@@ -111,5 +111,10 @@ Returned by `POST /webhook/vapi` when `VAPI_WEBHOOK_SECRET` is not configured.
 | `GET /supervisor/:requestID` | 404 | `requestID` does not exist |
 | `POST /webhook/vapi` | 401 | Invalid `x-waybill-signature` |
 | `POST /webhook/vapi` | 503 | Vapi webhook secret is not configured |
+| `/browser`, `/purchase`, `/settings` | 401 | Missing or invalid `ARC_API_KEY` |
+| `/browser`, `/purchase`, `/settings` | 503 | `ARC_API_KEY` is not configured |
+| `/purchase` routes | 503 | `AGENTCARD_*` variables are not configured |
+| `POST /purchase`, `POST /purchase/request/:requestID` | 409 | A purchase for this request is already in flight or succeeded |
+| `POST /purchase/request/:requestID` | 422 | No purchase URL is known for this request |
 
 For details on how requests move through stages and when these errors can occur, see [Request lifecycle](/concepts/request-lifecycle).
