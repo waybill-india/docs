@@ -36,7 +36,7 @@ Use these variables to run the pipeline end-to-end without contacting real suppl
 | Variable | Default | Description |
 | --- | --- | --- |
 | `SUPPLIER_SIMULATOR` | `false` | When `true`, the search agent picks from the built-in simulator supplier list and skips all real discovery |
-| `TEST_SUPPLIERS` | — | JSON array of `{ id, channel: 'email' \| 'whatsapp', address }` entries. Replaces the discovered supplier set with these fixed contacts |
+| `TEST_SUPPLIERS` | — | JSON array of `{ id, channel: 'email' \| 'whatsapp' \| 'voice', address }` entries. Replaces the discovered supplier set with these fixed contacts |
 
 ### `TEST_SUPPLIERS`
 
@@ -44,12 +44,12 @@ Use these variables to run the pipeline end-to-end without contacting real suppl
 
 - The search agent returns your test suppliers directly instead of running Exa, marketplace, or distributor searches.
 - The search agent still writes an empty row to `web_search_runs` so `POST /search/:requestID/handoff` can proceed for test suppliers while web discovery would otherwise still be `running`.
-- `EMAIL_TEST_ADDRESS` / `EMAIL_TEST_ADDRESSES` and `WHATSAPP_TEST_NUMBER` become optional. Deliveries are addressed to the `address` field on each test supplier instead.
+- `EMAIL_TEST_ADDRESS`, `WHATSAPP_TEST_NUMBER`, and `VOICE_TEST_NUMBER` become optional. Deliveries are addressed to the `address` field on each test supplier instead.
 
-Each entry must include a unique `id` (1–128 chars), a `channel` of `email` or `whatsapp`, and an `address` matching that channel (RFC email or E.164-style phone number).
+Each entry must include a unique `id` (1–128 chars), a `channel` of `email`, `whatsapp`, or `voice`, and an `address` matching that channel: an RFC email for `email`, an E.164-style phone number for `whatsapp`, or a strict E.164 number with a leading `+` and country code for `voice`.
 
 ```sh
-TEST_SUPPLIERS=[{"id":"test-email-1","channel":"email","address":"first@example.com"},{"id":"test-email-2","channel":"email","address":"second@example.com"},{"id":"test-whatsapp","channel":"whatsapp","address":"+911234567890"}]
+TEST_SUPPLIERS=[{"id":"test-email","channel":"email","address":"you@example.com"},{"id":"test-whatsapp","channel":"whatsapp","address":"+911234567890"},{"id":"test-voice","channel":"voice","address":"+911234567890"}]
 ```
 
 ## Tracing (Langfuse)
@@ -104,6 +104,8 @@ The WhatsApp block is all-or-nothing: leave every key blank to disable the chann
 
 ## Voice/SMS channel (Vapi)
 
+Voice is a supported handoff channel: suppliers listed with `channel: 'voice'` in `TEST_SUPPLIERS` are called via Vapi, and the search agent can route a real supplier to voice when voice credentials are configured.
+
 | Variable | Default | Description |
 | --- | --- | --- |
 | `VAPI_API_KEY` | — | Required to use the `voice` or `sms` channel |
@@ -111,6 +113,10 @@ The WhatsApp block is all-or-nothing: leave every key blank to disable the chann
 | `VAPI_WEBHOOK_URL` | — | Public URL of `POST /webhook/vapi`; inbound disabled if unset |
 | `VAPI_WEBHOOK_SECRET` | — | Shared secret sent back as `x-waybill-signature` |
 | `VAPI_SMS_PHONE_NUMBER_ID` | — | SMS-enabled US Twilio number imported into Vapi |
+| `VOICE_LIVE_DELIVERY` | `false` | When `false`, every outbound call dials `VOICE_TEST_NUMBER` instead of the real supplier |
+| `VOICE_TEST_NUMBER` | — | Test recipient for voice calls while `VOICE_LIVE_DELIVERY=false`. Must be strict E.164 with a leading `+` and country code (e.g. `+911234567890`) |
+
+Either `VOICE_TEST_NUMBER` or `TEST_SUPPLIERS` is required whenever `VAPI_PHONE_NUMBER_ID` is set and `VOICE_LIVE_DELIVERY=false`.
 
 ## Example `.env`
 
@@ -164,6 +170,8 @@ VAPI_PHONE_NUMBER_ID=phone_...
 VAPI_WEBHOOK_URL=https://your-host/webhook/vapi
 VAPI_WEBHOOK_SECRET=shared-secret
 VAPI_SMS_PHONE_NUMBER_ID=phone_sms_...
+VOICE_LIVE_DELIVERY=false
+VOICE_TEST_NUMBER=+911234567890
 ```
 
 See also:
