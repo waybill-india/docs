@@ -14,7 +14,7 @@ You can start a purchase in two ways:
 ## Prerequisites
 
 - A Browser Use Cloud API key in `BROWSER_USE_API_KEY`.
-- `ARC_API_KEY` set. The `/browser`, `/purchase`, and `/settings` routes return `503` when it is unset.
+- `ARC_API_KEY` set. The `/browser` and `/purchase` routes return `503` when it is unset.
 - AgentCard client credentials and a member email in `AGENTCARD_CLIENT_ID`, `AGENTCARD_CLIENT_SECRET`, and `AGENTCARD_MEMBER_EMAIL`. The `/purchase` routes return `503` until all three are set.
 - Migrations applied with `npm run migrate`. See [Database setup](/configuration/database).
 
@@ -43,14 +43,15 @@ See [Environment variables](/configuration/environment#browser-automation-and-ch
     npm run agentcard:attach
     ```
   </Step>
-  <Step title="Save a default shipping address">
-    Call [`PUT /settings`](/api-reference/settings/update) so the agent knows where to ship. Without an address, the agent uses addresses already saved on a signed-in account, or fails the purchase if the checkout requires one.
-  </Step>
 </Steps>
 
 <Note>
   Sandbox AgentCard numbers are not on real card networks. Live checkout pages only approve cards issued with production AgentCard credentials.
 </Note>
+
+## Shipping address
+
+The agent ships every purchase to a fixed Waybill test address and enters it exactly as written. The same name and postal code are used for the name on card and billing details. You can't set a shipping address per purchase or per request yet.
 
 ## How a purchase runs
 
@@ -58,11 +59,14 @@ Each purchase runs two Browser Use agent runs in the same browser session. A new
 
 <Steps>
   <Step title="Discover the total">
-    The first run adds the item to the cart and fills in the checkout details. It stops at the payment form and reports the exact final total, merchant, and payment page domain. The purchase status is `discovering_price`.
+    The first run adds the item to the cart and fills in the checkout details. It stops at the payment form and reports the exact final total, merchant, payment page domain, and number of units in the cart.
+
+    The agent buys the exact product at the checkout URL and never substitutes another product, seller, or variant. If the product is sold in packs, the agent adds enough packs to cover the required quantity. If the page can't supply that quantity, the purchase fails before checkout. The purchase status is `discovering_price`.
   </Step>
   <Step title="Mint a card locked to that amount">
     waybill-arc checks the total against your limits:
 
+    - For [purchases from a request](/api-reference/purchase/from-request), the cart must hold at least the resolved quantity. Fractional units such as `0.5` kg count.
     - The total must not exceed `AGENTCARD_MAX_AMOUNT_CENTS` (default `100000`, or $1,000).
     - If you pass `expectedAmountCents`, the total must fall within ±5% of it.
     - The payment page must be on the checkout URL's site or on a known payment host such as Stripe.
@@ -84,9 +88,11 @@ waybill-arc does not trust the agent's own report. After the payment run, it pol
 - If the server restarts mid-purchase, the purchase is left in a non-terminal state. waybill-arc reconciles these orphans at startup and every 10 minutes. It also reconciles them when you call `GET /purchase/:purchaseId` or `GET /purchase/request/:requestID`. A purchase with no update for 30 minutes has its card closed and is marked `failed` with the error `orchestrator restarted mid-purchase (orphaned)`.
 - Card credentials are never stored, logged, or returned by the API.
 
-### One purchase per request
+### One purchase per item
 
-A request can have only one purchase that is in flight or has succeeded. A second purchase for the same `requestId`, including two concurrent calls, returns `409` with the existing `purchaseId`, `status`, and `confirmation`. You can retry after a purchase has `failed`.
+A request can have several purchases, one per item. waybill-arc identifies an item by its `requestId` and `checkoutUrl`. Each item can have only one purchase that is in flight or has succeeded. A second purchase for the same item, including two concurrent calls, returns `409` with the existing `purchaseId`, `status`, and `confirmation`. You can retry an item after its purchase has `failed`. A purchase for a different `checkoutUrl` on the same request runs normally.
+
+Call [`GET /purchase/request/:requestID`](/api-reference/purchase/get-by-request) to list the latest purchase for every item in a request.
 
 ## Status values
 
@@ -149,5 +155,5 @@ curl http://localhost:3001/purchase/8f0f6c2e-5d0b-4a8e-9f57-2a1d3c4b5e6f \
 
 - [POST /purchase](/api-reference/purchase/start)
 - [POST /purchase/request/:requestID](/api-reference/purchase/from-request)
-- [GET /settings](/api-reference/settings/get) and [PUT /settings](/api-reference/settings/update)
+- [GET /purchase/request/:requestID](/api-reference/purchase/get-by-request)
 - [Environment variables](/configuration/environment)

@@ -4,7 +4,9 @@ sidebarTitle: "Purchase request"
 description: "POST /purchase/request/:requestID buys the part and quantity from a resolved intake request using automated checkout with a single-use AgentCard."
 ---
 
-Use `POST /purchase/request/:requestID` to buy what a resolved intake request asks for. waybill-arc builds the agent's mission from the resolved part name, manufacturer, and quantity. It then runs the same checkout flow as [`POST /purchase`](/api-reference/purchase/start).
+Use `POST /purchase/request/:requestID` to buy what a resolved intake request asks for. waybill-arc builds the agent's mission from the resolved part name, manufacturer, and quantity. It then runs the same checkout flow as [`POST /purchase`](/api-reference/purchase/start). The purchase fails before a card is minted if the cart holds fewer units than the resolved quantity.
+
+You can call this endpoint more than once for the same request with different `checkoutUrl` values, for example to buy separate items from different stores. Each item gets its own purchase.
 
 waybill-arc picks the checkout URL in this order:
 
@@ -98,7 +100,7 @@ Returns `202 Accepted`.
 | 403 | `profileId` is connected to a different user or site |
 | 404 | `{ "error": "Request not found" }` |
 | 409 | `{ "error": "Intake is not resolved yet", "status": "..." }` |
-| 409 | `{ "error": "This request was already purchased" }` or `"A purchase for this request is already in flight"`, with `purchaseId`, `status`, and `confirmation` |
+| 409 | `{ "error": "This item was already purchased" }` or `"A purchase for this item is already in flight"`, for the same request and checkout URL, with `purchaseId`, `status`, and `confirmation` |
 | 422 | No purchase URL is known for this request |
 | 503 | `ARC_API_KEY` or the `AGENTCARD_*` variables are not configured |
 

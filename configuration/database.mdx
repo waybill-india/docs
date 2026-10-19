@@ -35,8 +35,7 @@ The migration script sets up the following tables:
 - **`channel_threads`** — maps `(request_id, supplier_id, channel)` to the provider thread ID so replies stay in-thread and inbound webhooks can recover request context
 - **`web_search_runs`** — persists Exa web search run state and results
 - **`agentcard_connections`** — stores the AgentCard member connection and its refreshable token pair, keyed by member email. `npm run agentcard:setup` writes this row
-- **`agent_purchases`** — one row per [automated checkout](/guides/automated-checkout) purchase: status, discovered total, merchant, card ID and last four digits, Browser Use session and run IDs, confirmation, and error. A partial unique index allows only one in-flight or succeeded purchase per `request_id`
-- **`user_settings`** — stores the default shipping address set through `PUT /settings`
+- **`agent_purchases`** — one row per [automated checkout](/guides/automated-checkout) purchase: status, discovered total, merchant, card ID and last four digits, Browser Use session and run IDs, confirmation, and error. A partial unique index allows only one in-flight or succeeded purchase per item, identified by `request_id` and `checkout_url`
 
 <Note>
   Vercel Postgres or any Postgres 14\+ instance works. The migration script is idempotent and safe to re-run.

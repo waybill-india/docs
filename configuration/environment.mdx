@@ -56,11 +56,11 @@ waybill-arc reads its configuration from a `.env` file in the repo root, validat
 
 ## Browser automation and checkout
 
-These variables enable the `/browser`, `/purchase`, and `/settings` routes. See [Automated checkout](/guides/automated-checkout).
+These variables enable the `/browser` and `/purchase` routes. See [Automated checkout](/guides/automated-checkout).
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `ARC_API_KEY` | — | Protects `/browser`, `/purchase`, and `/settings`. Callers send it as `Authorization: Bearer <key>` or `X-API-Key`. When unset, those routes return `503`. Replaces `BROWSER_API_KEY` |
+| `ARC_API_KEY` | — | Protects `/browser` and `/purchase`. Callers send it as `Authorization: Bearer <key>` or `X-API-Key`. When unset, those routes return `503`. Replaces `BROWSER_API_KEY` |
 | `BROWSER_USE_API_KEY` | — | Browser Use Cloud key used for login capture and checkout runs |
 | `AGENTCARD_CLIENT_ID` | — | AgentCard client ID. Set all three `AGENTCARD_*` credentials or none |
 | `AGENTCARD_CLIENT_SECRET` | — | AgentCard client secret |

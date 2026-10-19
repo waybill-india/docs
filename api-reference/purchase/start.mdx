@@ -29,11 +29,11 @@ Send `ARC_API_KEY` as `Authorization: Bearer <key>` or `X-API-Key: <key>`.
 </ParamField>
 
 <ParamField body="requestId" type="string">
-  Ties the purchase to a request. Only one in-flight or succeeded purchase can exist per `requestId`.
+  Ties the purchase to a request. Only one in-flight or succeeded purchase can exist per item, identified by `requestId` and `checkoutUrl`.
 </ParamField>
 
 <ParamField body="userId" type="string">
-  Browser profile owner. Must be sent together with `site`. Also selects the shipping address, falling back to the default address.
+  Browser profile owner. Must be sent together with `site`.
 </ParamField>
 
 <ParamField body="site" type="string">
@@ -98,7 +98,7 @@ Returns `202 Accepted`.
 | 400 | `{ "errors": [...] }`. For example, neither `checkoutUrl` nor `task` was provided |
 | 401 | Missing or invalid API key |
 | 403 | `profileId` is connected to a different user or site |
-| 409 | `{ "error": "A purchase for this request is already in flight or succeeded", "purchaseId", "status", "confirmation" }` |
+| 409 | `{ "error": "A purchase for this item is already in flight or succeeded", "purchaseId", "status", "confirmation" }` |
 | 503 | `ARC_API_KEY` or the `AGENTCARD_*` variables are not configured |
 
 ## Related pages

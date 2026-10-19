@@ -102,13 +102,6 @@
             ]
           },
           {
-            "group": "Settings",
-            "pages": [
-              "api-reference/settings/get",
-              "api-reference/settings/update"
-            ]
-          },
-          {
             "group": "Webhooks",
             "pages": [
               "api-reference/webhooks/supplier",
