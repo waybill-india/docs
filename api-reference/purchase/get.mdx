@@ -1,0 +1,175 @@
+---
+title: "Get a Purchase"
+sidebarTitle: "Get purchase"
+description: "Poll GET /purchase/:purchaseId for automated checkout status, order total, card last four digits, live view URL, and confirmation."
+---
+
+Use `GET /purchase/:purchaseId` to poll a purchase until it reaches `succeeded` or `failed`. If the purchase has been stuck in a non-terminal state for more than 30 minutes, waybill-arc closes its card and marks it `failed` before responding.
+
+## Authentication
+
+Send `ARC_API_KEY` as `Authorization: Bearer <key>` or `X-API-Key: <key>`.
+
+## Request
+
+`GET /purchase/:purchaseId`
+
+<ParamField path="purchaseId" type="string" required>
+  The UUID returned by `POST /purchase` or `POST /purchase/request/:requestID`.
+</ParamField>
+
+```bash
+curl http://localhost:3001/purchase/8f0f6c2e-5d0b-4a8e-9f57-2a1d3c4b5e6f \
+  -H "Authorization: Bearer $ARC_API_KEY"
+```
+
+## Response
+
+<ResponseField name="purchaseId" type="string">
+  The purchase UUID.
+</ResponseField>
+
+<ResponseField name="requestId" type="string | null">
+  The request this purchase belongs to, if any.
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  One of `pending`, `discovering_price`, `card_created`, `paying`, `succeeded`, or `failed`.
+</ResponseField>
+
+<ResponseField name="checkoutUrl" type="string | null">
+  The URL the agent started from.
+</ResponseField>
+
+<ResponseField name="task" type="string | null">
+  The task given to the agent.
+</ResponseField>
+
+<ResponseField name="merchantName" type="string | null">
+  Merchant reported during discovery.
+</ResponseField>
+
+<ResponseField name="merchantDomain" type="string | null">
+  Payment page domain reported during discovery.
+</ResponseField>
+
+<ResponseField name="currency" type="string">
+  Always `usd`.
+</ResponseField>
+
+<ResponseField name="maxAmountCents" type="number | null">
+  Spending cap for this purchase: the lower of `AGENTCARD_MAX_AMOUNT_CENTS` and `expectedAmountCents` plus 5%.
+</ResponseField>
+
+<ResponseField name="totalAmountCents" type="number | null">
+  Exact total discovered at the payment form. The card is locked to this amount.
+</ResponseField>
+
+<ResponseField name="cartSummary" type="string | null">
+  Agent's summary of the cart.
+</ResponseField>
+
+<ResponseField name="cardId" type="string | null">
+  AgentCard card ID.
+</ResponseField>
+
+<ResponseField name="cardLast4" type="string | null">
+  Last four digits of the card. Full card details are never returned.
+</ResponseField>
+
+<ResponseField name="cardClosed" type="boolean">
+  Whether the card has been closed.
+</ResponseField>
+
+<ResponseField name="cardClosedReason" type="string | null">
+  AgentCard close reason, such as `used`.
+</ResponseField>
+
+<ResponseField name="profileId" type="string | null">
+  Browser Use profile used, if any.
+</ResponseField>
+
+<ResponseField name="sessionId" type="string | null">
+  Browser Use session shared by both runs.
+</ResponseField>
+
+<ResponseField name="discoverRunId" type="string | null">
+  Browser Use run ID of the discovery run.
+</ResponseField>
+
+<ResponseField name="payRunId" type="string | null">
+  Browser Use run ID of the payment run.
+</ResponseField>
+
+<ResponseField name="liveViewUrl" type="string | null">
+  URL for watching the browser session live.
+</ResponseField>
+
+<ResponseField name="confirmation" type="object | null">
+  Set when `status` is `succeeded`. Contains `orderReference`, `confirmationText`, `paymentSubmitted`, `chargedCents`, and `cardStatus`.
+</ResponseField>
+
+<ResponseField name="error" type="string | null">
+  Failure reason when `status` is `failed`.
+</ResponseField>
+
+<ResponseField name="superseded" type="boolean">
+  `true` when the purchase was closed as a duplicate for its request.
+</ResponseField>
+
+<ResponseField name="createdAt" type="string">
+  ISO 8601 creation time.
+</ResponseField>
+
+<ResponseField name="updatedAt" type="string">
+  ISO 8601 time of the last update.
+</ResponseField>
+
+```json
+{
+  "purchaseId": "8f0f6c2e-5d0b-4a8e-9f57-2a1d3c4b5e6f",
+  "requestId": null,
+  "status": "succeeded",
+  "checkoutUrl": "https://shop.example.com/products/stm32f103c8t6",
+  "task": "Buy 10 units of STM32F103C8T6.",
+  "merchantName": "Example Shop",
+  "merchantDomain": "shop.example.com",
+  "currency": "usd",
+  "maxAmountCents": 4463,
+  "totalAmountCents": 4318,
+  "cartSummary": "10 x STM32F103C8T6, standard shipping",
+  "cardId": "card_…",
+  "cardLast4": "4242",
+  "cardClosed": true,
+  "cardClosedReason": "used",
+  "profileId": null,
+  "sessionId": "…",
+  "discoverRunId": "…",
+  "payRunId": "…",
+  "liveViewUrl": "https://…",
+  "confirmation": {
+    "orderReference": "ORD-10293",
+    "confirmationText": "Thank you for your order!",
+    "paymentSubmitted": true,
+    "chargedCents": 4318,
+    "cardStatus": "closed"
+  },
+  "error": null,
+  "superseded": false,
+  "createdAt": "2026-10-05T09:12:03.000Z",
+  "updatedAt": "2026-10-05T09:18:41.000Z"
+}
+```
+
+## Errors
+
+| Status | Body |
+| --- | --- |
+| 401 | Missing or invalid API key |
+| 404 | `{ "error": "Purchase not found" }` |
+| 503 | `ARC_API_KEY` or the `AGENTCARD_*` variables are not configured |
+
+## Related pages
+
+- [Automated checkout](/guides/automated-checkout)
+- [GET /purchase/request/:requestID](/api-reference/purchase/get-by-request)

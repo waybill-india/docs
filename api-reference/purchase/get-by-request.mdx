@@ -1,0 +1,59 @@
+---
+title: "List a Request's Purchases"
+sidebarTitle: "Get request purchases"
+description: "GET /purchase/request/:requestID returns the latest automated checkout purchase for each item in an intake request."
+---
+
+Use `GET /purchase/request/:requestID` to list the purchases for a request when you don't have their `purchaseId` values. For example, use it to rehydrate a UI after a page reload.
+
+A request can have one purchase per item, identified by its `checkoutUrl`. This endpoint returns the latest purchase for each item. If an item has an in-flight or succeeded purchase, that purchase is returned instead of older failed attempts. waybill-arc reconciles stale non-terminal purchases before responding, the same as [`GET /purchase/:purchaseId`](/api-reference/purchase/get).
+
+## Authentication
+
+Send `ARC_API_KEY` as `Authorization: Bearer <key>` or `X-API-Key: <key>`.
+
+## Request
+
+`GET /purchase/request/:requestID`
+
+<ParamField path="requestID" type="string" required>
+  The request UUID.
+</ParamField>
+
+```bash
+curl http://localhost:3001/purchase/request/299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21 \
+  -H "Authorization: Bearer $ARC_API_KEY"
+```
+
+## Response
+
+<ResponseField name="purchases" type="array">
+  One purchase record per item, newest first. Empty when the request has no purchases. See [GET /purchase/:purchaseId](/api-reference/purchase/get#response) for every field.
+</ResponseField>
+
+```json
+{
+  "purchases": [
+    {
+      "purchaseId": "8f0f6c2e-5d0b-4a8e-9f57-2a1d3c4b5e6f",
+      "requestId": "299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21",
+      "status": "paying",
+      "checkoutUrl": "https://shop.example.com/products/stm32f103c8t6",
+      "totalAmountCents": 4318,
+      "liveViewUrl": "https://…"
+    }
+  ]
+}
+```
+
+## Errors
+
+| Status | Body |
+| --- | --- |
+| 401 | Missing or invalid API key |
+| 503 | `ARC_API_KEY` or the `AGENTCARD_*` variables are not configured |
+
+## Related pages
+
+- [POST /purchase/request/:requestID](/api-reference/purchase/from-request)
+- [Automated checkout](/guides/automated-checkout)
