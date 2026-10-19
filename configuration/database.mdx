@@ -39,6 +39,20 @@ The migration script sets up the following tables:
   Vercel Postgres or any Postgres 14\+ instance works. The migration script is idempotent and safe to re-run.
 </Note>
 
+## WhatsApp message store
+
+If any WhatsApp keys are set, waybill-arc also connects to a separate Postgres instance for the WhatsApp message store, configured with `WHATSAPP_DATABASE_URL` (pooled, used at runtime) and `WHATSAPP_DIRECT_URL` (direct, used only by Prisma migrations).
+
+Apply the WhatsApp migrations with:
+
+```sh
+npm run db:deploy
+```
+
+<Warning>
+  The WhatsApp schema check runs at startup and is fail-closed. If `WHATSAPP_DATABASE_URL` is unreachable or the migrations have not been applied, the server logs the error and exits with code 1 instead of starting in a degraded state. Run `npm run db:deploy` before boot whenever the WhatsApp channel is enabled.
+</Warning>
+
 See also:
 
 - [Environment variables](/configuration/environment)

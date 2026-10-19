@@ -6,13 +6,20 @@ description: "Configure waybill-arc with environment variables for LLMs, Postgre
 
 waybill-arc reads its configuration from a `.env` file in the repo root, validated by `src/config.ts`. Set the required keys for LLM calls and database connectivity, then add optional variables to tune agent behavior, enable channels, or wire observability.
 
+<Note>
+  Blank values in `.env` are stripped before schema validation. Leaving an optional key empty means "feature disabled" — it will not fail startup or override a default. To turn a feature off, leave its key blank rather than removing it.
+</Note>
+
+<Note>
+  The bundled `.env.example` groups keys into six sections: **REQUIRED**, **LOCAL TESTING**, **EMAIL**, **WHATSAPP**, **INTAKE TUNING**, and **OPTIONAL**. `SUPPLIER_SIMULATOR` defaults to `false` in the example so a fresh copy talks to real discovery unless you opt into the simulator.
+</Note>
+
 ## Required
 
 | Variable | Description |
 | --- | --- |
 | `OPENAI_API_KEY` | OpenAI key for LLM calls |
 | `DATABASE_URL` | Postgres connection string for LangGraph checkpoints and channel tables |
-| `SUPPLIER_API_URL` | Base URL for the supplier simulator exposing `GET /api/getAllSuppliers` |
 
 ## Agent tuning
 
@@ -20,6 +27,31 @@ waybill-arc reads its configuration from a `.env` file in the repo root, validat
 | --- | --- | --- |
 | `CONFIDENCE_THRESHOLD` | `0.9` | Minimum confidence before intake resolves a query |
 | `MAX_TOOL_ITERATIONS` | `15` | Cap on agent tool-call loops |
+
+## Local testing
+
+Use these variables to point waybill-arc at the hosted supplier simulator or wire in your own contacts as test suppliers.
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `SUPPLIER_SIMULATOR` | `false` | When `true`, discovery is replaced by the deployed simulator at `SUPPLIER_API_URL`: the model matches against AI personas and every manual persona joins the run as well. Replies come back through Hookdeck |
+| `SUPPLIER_API_URL` | `https://supplier-simulation.vercel.app` | Base URL of the supplier simulator exposing `GET /api/getAllSuppliers`. Point at your own deploy to override |
+| `TEST_SUPPLIERS` | — | JSON array of `{ id, channel: 'email' \| 'whatsapp' \| 'voice', address }` entries representing your own contacts, reached on the real channel even while live delivery is off |
+
+### `TEST_SUPPLIERS`
+
+`TEST_SUPPLIERS` injects fixed contacts you own so you can see real messages land during development. Behavior depends on `SUPPLIER_SIMULATOR`:
+
+- **Simulator on** — your test suppliers join every run alongside the AI-matched and manual simulator personas.
+- **Simulator off** — your test suppliers are returned as the search agent's selections, and real supplier discovery is picked by hand in the UI. The search agent also writes an empty row to `web_search_runs` so `POST /search/:requestID/handoff` can proceed while web discovery would otherwise still be `running`.
+
+Test suppliers are delivered through the real channel for their `channel` value, regardless of `EMAIL_LIVE_DELIVERY`, `WHATSAPP_LIVE_DELIVERY`, or `VOICE_LIVE_DELIVERY`. The address on each entry is the recipient. `EMAIL_TEST_ADDRESS`, `WHATSAPP_TEST_NUMBER`, and `VOICE_TEST_NUMBER` are not required when `TEST_SUPPLIERS` covers the channels you have enabled.
+
+Each entry must include a unique `id` (1–128 chars), a `channel` of `email`, `whatsapp`, or `voice`, and an `address` matching that channel: an RFC email for `email`, an E.164-style phone number for `whatsapp`, or a strict E.164 number with a leading `+` and country code for `voice`.
+
+```sh
+TEST_SUPPLIERS=[{"id":"me-email","channel":"email","address":"you@example.com"},{"id":"me-whatsapp","channel":"whatsapp","address":"+911234567890"},{"id":"me-voice","channel":"voice","address":"+911234567890"}]
+```
 
 ## Tracing (Langfuse)
 
@@ -41,10 +73,39 @@ waybill-arc reads its configuration from a `.env` file in the repo root, validat
 | --- | --- | --- |
 | `AGENTMAIL_API_KEY` | — | Required to use the email channel |
 | `AGENTMAIL_WEBHOOK_SECRET` | — | Svix signing secret for `POST /webhook/email` |
-| `AGENTMAIL_INBOX_ID` | — | Use an existing inbox instead of creating one |
-| `AGENTMAIL_INBOX_USERNAME` | `procurement` | Username for the shared inbox created on first use |
+| `AGENTMAIL_INBOX` | — | Full inbox address this backend owns, e.g. `dev-yourname@trywaybill.com`. The inbox is looked up on boot and created on 404, so a fresh developer address appears on first run. The email webhook drops any event whose `inbox_id` does not match this inbox, so a shared AgentMail account can split dev and prod traffic |
+| `EMAIL_LIVE_DELIVERY` | `false` | When `false`, every outbound RFQ is redirected to `EMAIL_TEST_ADDRESS` instead of the real supplier |
+| `EMAIL_TEST_ADDRESS` | — | Test recipient used while `EMAIL_LIVE_DELIVERY=false` |
+
+Either `EMAIL_TEST_ADDRESS` or `TEST_SUPPLIERS` is required whenever `AGENTMAIL_API_KEY` is set and `EMAIL_LIVE_DELIVERY=false`.
+
+## WhatsApp channel (Meta Cloud API)
+
+The WhatsApp block is all-or-nothing: leave every key blank to disable the channel, or set the full set to enable it.
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `WHATSAPP_ACCESS_TOKEN` | — | Meta Cloud API access token |
+| `WHATSAPP_PHONE_NUMBER_ID` | — | Sender phone number ID |
+| `WHATSAPP_BUSINESS_ACCOUNT_ID` | — | WhatsApp Business Account ID |
+| `WHATSAPP_APP_SECRET` | — | App secret used to verify inbound webhook signatures |
+| `WHATSAPP_WEBHOOK_VERIFY_TOKEN` | — | Verify token for the Meta webhook handshake (min 8 chars) |
+| `WHATSAPP_API_KEY` | — | Bearer token guarding `/whatsapp/*` routes (min 16 chars) |
+| `WHATSAPP_DATABASE_URL` | — | Pooled Postgres URL for the WhatsApp message store |
+| `WHATSAPP_DIRECT_URL` | — | Direct Postgres URL used only by `npm run db:deploy` |
+| `WHATSAPP_LIVE_DELIVERY` | `false` | When `false`, every outbound WhatsApp message is redirected to `WHATSAPP_TEST_NUMBER` |
+| `WHATSAPP_TEST_NUMBER` | — | Test recipient used while `WHATSAPP_LIVE_DELIVERY=false` (E.164, e.g. `+911234567890`) |
+| `WHATSAPP_ENQUIRY_TEMPLATE` | `waybill_enquiry` | Name of the Meta-approved template used for the first outbound message (outside the 24-hour reply window) |
+| `WHATSAPP_FOLLOWUP_TEMPLATE` | `waybill_followup` | Name of the Meta-approved template used for follow-up messages outside the 24-hour reply window |
+| `WHATSAPP_TEMPLATE_LANGUAGE` | `en` | Language code of the approved templates |
+| `GRAPH_API_BASE_URL` | `https://graph.facebook.com` | Meta Graph API host |
+| `GRAPH_API_VERSION` | `v26.0` | Meta Graph API version. Bump when Meta retires the current version |
+
+`WHATSAPP_TEST_NUMBER` is required whenever WhatsApp is configured and `WHATSAPP_LIVE_DELIVERY=false`, unless `TEST_SUPPLIERS` covers it. Override the template names and language to match the exact templates you have approved in Meta Business Manager.
 
 ## Voice/SMS channel (Vapi)
+
+Voice is a supported handoff channel: suppliers listed with `channel: 'voice'` in `TEST_SUPPLIERS` are called via Vapi, and the search agent can route a real supplier to voice when voice credentials are configured.
 
 | Variable | Default | Description |
 | --- | --- | --- |
@@ -53,6 +114,10 @@ waybill-arc reads its configuration from a `.env` file in the repo root, validat
 | `VAPI_WEBHOOK_URL` | — | Public URL of `POST /webhook/vapi`; inbound disabled if unset |
 | `VAPI_WEBHOOK_SECRET` | — | Shared secret sent back as `x-waybill-signature` |
 | `VAPI_SMS_PHONE_NUMBER_ID` | — | SMS-enabled US Twilio number imported into Vapi |
+| `VOICE_LIVE_DELIVERY` | `false` | When `false`, every outbound call dials `VOICE_TEST_NUMBER` instead of the real supplier |
+| `VOICE_TEST_NUMBER` | — | Test recipient for voice calls while `VOICE_LIVE_DELIVERY=false`. Must be strict E.164 with a leading `+` and country code (e.g. `+911234567890`) |
+
+Either `VOICE_TEST_NUMBER` or `TEST_SUPPLIERS` is required whenever `VAPI_PHONE_NUMBER_ID` is set and `VOICE_LIVE_DELIVERY=false`.
 
 ## Example `.env`
 
@@ -60,11 +125,13 @@ waybill-arc reads its configuration from a `.env` file in the repo root, validat
 # Required
 OPENAI_API_KEY=sk-...
 DATABASE_URL=postgres://user:pass@host:5432/dbname
-SUPPLIER_API_URL=https://your-supplier-sim.example.com
-
 # Agent tuning
 CONFIDENCE_THRESHOLD=0.9
 MAX_TOOL_ITERATIONS=15
+
+# Local testing (optional)
+SUPPLIER_SIMULATOR=false
+TEST_SUPPLIERS=[{"id":"test-email","channel":"email","address":"you@example.com"}]
 
 # Tracing (optional)
 LANGFUSE_PUBLIC_KEY=pk-...
@@ -77,8 +144,24 @@ EXA_API_KEY=exa-...
 # Email channel (optional)
 AGENTMAIL_API_KEY=am-...
 AGENTMAIL_WEBHOOK_SECRET=whsec_...
-AGENTMAIL_INBOX_ID=inbox_...
-AGENTMAIL_INBOX_USERNAME=procurement
+AGENTMAIL_INBOX=dev-yourname@trywaybill.com
+EMAIL_LIVE_DELIVERY=false
+EMAIL_TEST_ADDRESS=you@example.com
+
+# WhatsApp channel (optional)
+WHATSAPP_ACCESS_TOKEN=...
+WHATSAPP_PHONE_NUMBER_ID=...
+WHATSAPP_BUSINESS_ACCOUNT_ID=...
+WHATSAPP_APP_SECRET=...
+WHATSAPP_WEBHOOK_VERIFY_TOKEN=...
+WHATSAPP_API_KEY=...
+WHATSAPP_DATABASE_URL=postgres://user:pass@host:5432/whatsapp
+WHATSAPP_DIRECT_URL=postgres://user:pass@host:5432/whatsapp
+WHATSAPP_LIVE_DELIVERY=false
+WHATSAPP_TEST_NUMBER=+911234567890
+WHATSAPP_ENQUIRY_TEMPLATE=waybill_enquiry
+WHATSAPP_FOLLOWUP_TEMPLATE=waybill_followup
+WHATSAPP_TEMPLATE_LANGUAGE=en
 
 # Voice/SMS channel (optional)
 VAPI_API_KEY=vapi-...
@@ -86,6 +169,8 @@ VAPI_PHONE_NUMBER_ID=phone_...
 VAPI_WEBHOOK_URL=https://your-host/webhook/vapi
 VAPI_WEBHOOK_SECRET=shared-secret
 VAPI_SMS_PHONE_NUMBER_ID=phone_sms_...
+VOICE_LIVE_DELIVERY=false
+VOICE_TEST_NUMBER=+911234567890
 ```
 
 See also:
