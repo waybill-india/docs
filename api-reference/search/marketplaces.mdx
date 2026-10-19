@@ -1,0 +1,98 @@
+---
+title: "Get Marketplace Search Results"
+sidebarTitle: "Marketplace Results"
+description: "GET /search/:requestID/marketplaces returns product listings from the 11 supported marketplaces, plus per-marketplace errors."
+---
+
+Fetch the marketplace product search results for a request. [`POST /search/:requestID`](/api-reference/search/start) runs the marketplace search when `PARSEBOT_API_KEY` is configured. These products are buy-now listings, not part of the supervisor RFQ flow. See [Marketplace product search](/concepts/search#marketplace-product-search) for the list of supported marketplaces.
+
+## Endpoint
+
+```http
+GET /search/:requestID/marketplaces
+```
+
+## Request
+
+<CodeGroup>
+
+```bash cURL
+curl http://localhost:3001/search/299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21/marketplaces
+```
+
+</CodeGroup>
+
+## Response
+
+### 200 — Marketplace products
+
+```json
+{
+  "requestID": "299cb5b9-4b9d-4c1a-9d51-3f2f0a4f0e21",
+  "status": "completed",
+  "products": [
+    {
+      "marketplace": "amazon",
+      "title": "STM32F103C8T6 ARM Development Board",
+      "price": "₹389",
+      "currency": "INR",
+      "productUrl": "https://www.amazon.in/dp/…",
+      "imageUrl": "https://m.media-amazon.com/images/…",
+      "rating": 4.2,
+      "supplierName": "Robu.in",
+      "minOrderQuantity": null,
+      "location": null
+    },
+    {
+      "marketplace": "alibaba",
+      "title": "STM32F103C8T6 MCU LQFP48",
+      "price": "$0.85-$1.20",
+      "currency": "USD",
+      "productUrl": "https://www.alibaba.com/product-detail/…",
+      "imageUrl": null,
+      "rating": null,
+      "supplierName": "Shenzhen Botai Automation Co.",
+      "minOrderQuantity": "10 pieces",
+      "location": "Guangdong, China"
+    }
+  ],
+  "errors": [
+    {
+      "marketplace": "mcmaster",
+      "error": "parse.bot mcmaster search_products failed with status 504: Gateway Timeout"
+    }
+  ]
+}
+```
+
+<ResponseField name="status" type="string">
+  `completed` or `failed`. The status is `failed` only when every marketplace returned an error.
+</ResponseField>
+
+<ResponseField name="products" type="array">
+  Up to 5 relevant products per marketplace. Any field the marketplace didn't provide is `null`. Priced listings from the [Exa web search](/api-reference/search/web) are appended with `marketplace` set to `web`.
+</ResponseField>
+
+<ResponseField name="marketplace" type="string">
+  One of `flipkart`, `amazon`, `ebay`, `indiamart`, `alibaba`, `microcenter`, `misumi`, `boltdepot`, `mcmaster`, `zoro`, `robotshop`, or `web`.
+</ResponseField>
+
+<ResponseField name="minOrderQuantity" type="string | null">
+  Minimum order quantity as listed by the marketplace, for example `10 pieces`.
+</ResponseField>
+
+<ResponseField name="errors" type="array">
+  One entry per marketplace that failed, with `marketplace` and an `error` message. A failing marketplace doesn't affect results from the others.
+</ResponseField>
+
+## Errors
+
+| Status | Body | Meaning |
+| --- | --- | --- |
+| 404 | `{ "error": "No marketplace search for this request" }` | The request has no marketplace search results and no priced web listings. Check that `PARSEBOT_API_KEY` is set and that you called [`POST /search/:requestID`](/api-reference/search/start). |
+
+## Related
+
+- [Start Supplier Search](/api-reference/search/start)
+- [Web Search Candidates](/api-reference/search/web)
+- [Search Concepts](/concepts/search)

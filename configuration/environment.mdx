@@ -35,6 +35,12 @@ waybill-arc reads its configuration from a `.env` file in the repo root, validat
 | --- | --- |
 | `EXA_API_KEY` | Enables the parallel Exa web-search leg of `POST /search` |
 
+## Marketplace search (parse.bot)
+
+| Variable | Description |
+| --- | --- |
+| `PARSEBOT_API_KEY` | Enables the parallel marketplace product search leg of `POST /search`. See [Marketplace product search](/concepts/search#marketplace-product-search). |
+
 ## Email channel (AgentMail)
 
 | Variable | Default | Description |
@@ -73,6 +79,9 @@ LANGFUSE_BASE_URL=https://us.cloud.langfuse.com
 
 # Web search (optional)
 EXA_API_KEY=exa-...
+
+# Marketplace search (optional)
+PARSEBOT_API_KEY=...
 
 # Email channel (optional)
 AGENTMAIL_API_KEY=am-...
