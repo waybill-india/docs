@@ -20,7 +20,6 @@ waybill-arc reads its configuration from a `.env` file in the repo root, validat
 | --- | --- |
 | `OPENAI_API_KEY` | OpenAI key for LLM calls |
 | `DATABASE_URL` | Postgres connection string for LangGraph checkpoints and channel tables |
-| `SUPPLIER_API_URL` | Base URL for the supplier simulator exposing `GET /api/getAllSuppliers` |
 
 ## Agent tuning
 
@@ -31,25 +30,27 @@ waybill-arc reads its configuration from a `.env` file in the repo root, validat
 
 ## Local testing
 
-Use these variables to run the pipeline end-to-end without contacting real suppliers.
+Use these variables to point waybill-arc at the hosted supplier simulator or wire in your own contacts as test suppliers.
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `SUPPLIER_SIMULATOR` | `false` | When `true`, the search agent picks from the built-in simulator supplier list and skips all real discovery |
-| `TEST_SUPPLIERS` | — | JSON array of `{ id, channel: 'email' \| 'whatsapp' \| 'voice', address }` entries. Replaces the discovered supplier set with these fixed contacts |
+| `SUPPLIER_SIMULATOR` | `false` | When `true`, discovery is replaced by the deployed simulator at `SUPPLIER_API_URL`: the model matches against AI personas and every manual persona joins the run as well. Replies come back through Hookdeck |
+| `SUPPLIER_API_URL` | `https://supplier-simulation.vercel.app` | Base URL of the supplier simulator exposing `GET /api/getAllSuppliers`. Point at your own deploy to override |
+| `TEST_SUPPLIERS` | — | JSON array of `{ id, channel: 'email' \| 'whatsapp' \| 'voice', address }` entries representing your own contacts, reached on the real channel even while live delivery is off |
 
 ### `TEST_SUPPLIERS`
 
-`TEST_SUPPLIERS` short-circuits discovery so RFQs go to a known set of test recipients. When it is set:
+`TEST_SUPPLIERS` injects fixed contacts you own so you can see real messages land during development. Behavior depends on `SUPPLIER_SIMULATOR`:
 
-- The search agent returns your test suppliers directly instead of running Exa, marketplace, or distributor searches.
-- The search agent still writes an empty row to `web_search_runs` so `POST /search/:requestID/handoff` can proceed for test suppliers while web discovery would otherwise still be `running`.
-- `EMAIL_TEST_ADDRESS`, `WHATSAPP_TEST_NUMBER`, and `VOICE_TEST_NUMBER` become optional. Deliveries are addressed to the `address` field on each test supplier instead.
+- **Simulator on** — your test suppliers join every run alongside the AI-matched and manual simulator personas.
+- **Simulator off** — your test suppliers are returned as the search agent's selections, and real supplier discovery is picked by hand in the UI. The search agent also writes an empty row to `web_search_runs` so `POST /search/:requestID/handoff` can proceed while web discovery would otherwise still be `running`.
+
+Test suppliers are delivered through the real channel for their `channel` value, regardless of `EMAIL_LIVE_DELIVERY`, `WHATSAPP_LIVE_DELIVERY`, or `VOICE_LIVE_DELIVERY`. The address on each entry is the recipient. `EMAIL_TEST_ADDRESS`, `WHATSAPP_TEST_NUMBER`, and `VOICE_TEST_NUMBER` are not required when `TEST_SUPPLIERS` covers the channels you have enabled.
 
 Each entry must include a unique `id` (1–128 chars), a `channel` of `email`, `whatsapp`, or `voice`, and an `address` matching that channel: an RFC email for `email`, an E.164-style phone number for `whatsapp`, or a strict E.164 number with a leading `+` and country code for `voice`.
 
 ```sh
-TEST_SUPPLIERS=[{"id":"test-email","channel":"email","address":"you@example.com"},{"id":"test-whatsapp","channel":"whatsapp","address":"+911234567890"},{"id":"test-voice","channel":"voice","address":"+911234567890"}]
+TEST_SUPPLIERS=[{"id":"me-email","channel":"email","address":"you@example.com"},{"id":"me-whatsapp","channel":"whatsapp","address":"+911234567890"},{"id":"me-voice","channel":"voice","address":"+911234567890"}]
 ```
 
 ## Tracing (Langfuse)
@@ -124,8 +125,6 @@ Either `VOICE_TEST_NUMBER` or `TEST_SUPPLIERS` is required whenever `VAPI_PHONE_
 # Required
 OPENAI_API_KEY=sk-...
 DATABASE_URL=postgres://user:pass@host:5432/dbname
-SUPPLIER_API_URL=https://your-supplier-sim.example.com
-
 # Agent tuning
 CONFIDENCE_THRESHOLD=0.9
 MAX_TOOL_ITERATIONS=15
