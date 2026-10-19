@@ -1,10 +1,10 @@
 ---
 title: "Search: Supplier Selection and Web Discovery"
 sidebarTitle: "Search"
-description: "Learn how waybill-arc search selects internal suppliers, hands off to the supervisor for RFQs, and runs an optional Exa web search for open-web candidates."
+description: "Learn how waybill-arc search selects internal suppliers, hands off to the supervisor for RFQs, and runs optional Exa web search and marketplace product search across 11 marketplaces."
 ---
 
-waybill-arc search runs after intake resolves a query. It picks internal suppliers from the supplier network, hands them off to the [supervisor](/concepts/supervisor) (which sends RFQs), and optionally starts a parallel Exa web search for open-web suppliers when `EXA_API_KEY` is configured.
+waybill-arc search runs after intake resolves a query. It picks internal suppliers from the supplier network, hands them off to the [supervisor](/concepts/supervisor) (which sends RFQs), and optionally starts a parallel Exa web search for open-web suppliers when `EXA_API_KEY` is configured. When `PARSEBOT_API_KEY` is configured, it also searches 11 online marketplaces for buy-now product listings.
 
 ## What happens during search
 
@@ -13,6 +13,7 @@ When you call `POST /search/:requestID`, the search agent:
 1. Reads the resolved query and selects the most relevant internal suppliers.
 2. Hands the selected suppliers to the supervisor, which immediately sends RFQs.
 3. If `EXA_API_KEY` is set, starts an Exa web search for marketplace listings and quotation-based suppliers on the open web.
+4. If `PARSEBOT_API_KEY` is set, searches 11 online marketplaces for matching products. See [Marketplace product search](#marketplace-product-search).
 
 ## Search response
 
@@ -73,8 +74,63 @@ Any unverified field may be `null`. Web candidates are **not** part of the super
 }
 ```
 
+## Marketplace product search
+
+Marketplace product search looks up buy-now product listings on online marketplaces. Use it when the part can be bought directly instead of quoted. It runs in parallel with internal supplier selection and the Exa web search.
+
+### Supported marketplaces
+
+Every search queries all 11 marketplaces at once:
+
+| Marketplace | `marketplace` value |
+| --- | --- |
+| Flipkart | `flipkart` |
+| Amazon | `amazon` |
+| eBay | `ebay` |
+| IndiaMART | `indiamart` |
+| Alibaba | `alibaba` |
+| Micro Center | `microcenter` |
+| Misumi | `misumi` |
+| Bolt Depot | `boltdepot` |
+| McMaster-Carr | `mcmaster` |
+| Zoro | `zoro` |
+| RobotShop | `robotshop` |
+
+waybill-arc keeps the top 5 relevant products per marketplace. Alibaba listings whose minimum order quantity exceeds the requested quantity are dropped.
+
+### Configuration
+
+Marketplace search uses [parse.bot](https://parse.bot) scrapers and requires `PARSEBOT_API_KEY`:
+
+```sh
+PARSEBOT_API_KEY=your-parsebot-key
+```
+
+When `PARSEBOT_API_KEY` is unset, waybill-arc skips marketplace search. `POST /search/:requestID` then returns `marketplaceSearched: false`.
+
+### Timing
+
+Each marketplace call times out after 60 seconds. Calls can approach that limit, especially cold calls to scrapers that haven't run recently. `POST /search/:requestID` waits for the marketplace leg to finish, so allow up to about 60 seconds for the response.
+
+### Partial failures
+
+Each marketplace is queried independently. If one marketplace fails or times out, waybill-arc records an error for that marketplace only, and the other marketplaces still return products. The run's `status` is `failed` only when every marketplace fails.
+
+```json
+{
+  "status": "completed",
+  "products": [ { "marketplace": "amazon", "title": "STM32F103C8T6 Blue Pill Board", "price": "₹389" } ],
+  "errors": [
+    { "marketplace": "mcmaster", "error": "parse.bot mcmaster search_products failed with status 504: Gateway Timeout" }
+  ]
+}
+```
+
+Fetch results with [`GET /search/:requestID/marketplaces`](/api-reference/search/marketplaces).
+
 ## Related pages
 
 - [Start search](/api-reference/search/start)
 - [Web search results](/api-reference/search/web)
+- [Marketplace search results](/api-reference/search/marketplaces)
 - [Supervisor](/concepts/supervisor)
