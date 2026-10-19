@@ -6,6 +6,22 @@ description: "Learn how inbound webhooks from the supplier gateway, AgentMail em
 
 waybill-arc pauses the supervisor while it waits for supplier replies. Two inbound webhook endpoints resume the run when replies arrive: one for the supplier gateway, and one for Vapi voice and SMS events. This guide covers how each webhook works, what payloads to expect, and how to configure them.
 
+## Acknowledgement and background processing
+
+The supplier gateway (`POST /webhook`), AgentMail email (`POST /webhook/email`), WhatsApp, and Vapi call-end (`end-of-call-report`) webhooks acknowledge a reply before the supervisor finishes with it:
+
+1. waybill-arc saves the supplier reply.
+2. waybill-arc responds to the sender immediately.
+3. waybill-arc resumes the supplier's worker in the background.
+
+Resuming the worker can take a minute or more. Answering first keeps each webhook under the 60-second timeout that relays such as Hookdeck enforce.
+
+A `200` response means the reply was accepted and saved. It does not mean the supervisor has resumed. Supervisor progress shows up shortly afterwards, so poll the request state instead of expecting it to change by the time the webhook returns.
+
+If a background resume fails or is cut off, the reply stays unprocessed. waybill-arc retries unprocessed replies at startup and every 10 minutes. A reply that another process already claimed is retried once that claim expires after 15 minutes. Unprocessed replies have no age limit.
+
+WhatsApp returns `500` if saving the reply fails, so Meta redelivers the message. Vapi SMS (`session.updated`) events still resume the supervisor before the endpoint responds.
+
 ## Supplier gateway
 
 `POST /webhook` is called by the supplier gateway when a supplier replies.
@@ -27,11 +43,11 @@ waybill-arc pauses the supervisor while it waits for supplier replies. Two inbou
 }
 ```
 
-This resumes the supervisor run automatically. A UI does not need to call this endpoint directly.
+The supervisor run resumes automatically in the background after the endpoint responds. A UI does not need to call this endpoint directly.
 
 ## AgentMail email
 
-Inbound email replies are dispatched to the handler registered in `src/webhook.ts`, which resumes the supervisor.
+`POST /webhook/email` receives inbound email replies from AgentMail. The endpoint saves the reply, responds, and then resumes the supervisor in the background.
 
 To register the webhook, run:
 
@@ -60,14 +76,14 @@ Requests are matched to a `(request_id, supplier_id)` pair through `channel_thre
 
 Only two event types are acted on:
 
-- `end-of-call-report` — voice call ended, resume the supervisor
-- `session.updated` — SMS session updated, resume the supervisor
+- `end-of-call-report`: voice call ended. waybill-arc saves the call report, responds, and resumes the supervisor in the background.
+- `session.updated`: SMS session updated. waybill-arc resumes the supervisor before it responds.
 
 ### Response codes
 
 | Status | Meaning |
 | --- | --- |
-| `200 {}` | Event handled and the supervisor was resumed |
+| `200 {}` | Event accepted. For `end-of-call-report`, the call report is saved and the supervisor resumes in the background. For `session.updated`, the supervisor was resumed. |
 | `204` | Event ignored (unhandled type, unmapped call or session, or nothing new from the supplier) |
 | `401` | Invalid webhook signature |
 | `503` | Vapi webhook is not configured (`VAPI_WEBHOOK_SECRET` is unset) |

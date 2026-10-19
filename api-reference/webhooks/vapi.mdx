@@ -6,6 +6,8 @@ description: "POST /webhook/vapi receives Vapi call-end and SMS session events t
 
 Vapi calls `POST /webhook/vapi` when a voice call ends or an SMS session updates. The endpoint authenticates requests with the `x-waybill-signature` header echoed back by Vapi from the `server.headers` set on each transient assistant. It matches the event to a request and supplier through `channel_threads` (Vapi call ID for voice, session ID for SMS), then resumes the supervisor run.
 
+For `end-of-call-report`, the endpoint saves the call report and responds immediately. It then resumes the supplier's worker in the background. For `session.updated`, the endpoint resumes the supervisor before it responds.
+
 ## Endpoint
 
 ```http
@@ -44,12 +46,14 @@ curl -X POST http://localhost:3001/webhook/vapi \
 
 | Status | Body | Meaning |
 | --- | --- | --- |
-| 200 | `{}` | Event handled and the supervisor was resumed. |
+| 200 | `{}` | Event accepted. For `end-of-call-report`, the call report is saved and the supervisor resumes in the background. For `session.updated`, the supervisor was resumed. |
 | 204 | (empty) | Event ignored: unhandled type, unmapped call or session, or nothing new from the supplier. |
 | 401 | `{ "error": "Invalid webhook signature" }` | The `x-waybill-signature` header did not match. |
 | 503 | `{ "error": "Vapi webhook is not configured" }` | `VAPI_WEBHOOK_SECRET` is not set. |
 
 ## Failure behavior
+
+A `200` for `end-of-call-report` does not mean the supervisor has resumed. Poll the request state to see supervisor progress. If the background resume fails or is cut off, the call report stays unprocessed. waybill-arc retries it at startup and every 10 minutes, once any existing 15-minute claim expires.
 
 Failures that happen after a call is dispatched, such as unanswered, voicemail, insufficient credits, or international dialing blocked on free Vapi numbers, arrive as `endedReason` on the report rather than as HTTP errors. Vapi exposes no SMS delivery status. Inbound SMS is US↔US only, so a non-US supplier can receive an SMS but cannot reply through Vapi.
 
