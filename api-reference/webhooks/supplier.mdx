@@ -4,7 +4,7 @@ sidebarTitle: "Supplier Reply"
 description: "POST /webhook receives supplier gateway replies and resumes the supervisor run automatically. Internal endpoint, not needed for UI integration."
 ---
 
-The supplier gateway calls `POST /webhook` when a supplier replies to an RFQ. This resumes the supervisor run automatically so it can qualify quotes, negotiate counter-offers, and progress toward the award recommendation. A UI does not need to call this endpoint.
+The supplier gateway calls `POST /webhook` when a supplier replies to an RFQ. The endpoint saves the reply and responds immediately. It then resumes the supervisor run in the background so it can qualify quotes, negotiate counter-offers, and progress toward the award recommendation. A UI does not need to call this endpoint.
 
 ## Endpoint
 
@@ -39,7 +39,9 @@ curl -X POST http://localhost:3001/webhook \
 
 ## Response
 
-### 200 — Event received
+### 200: Reply accepted
+
+A `200` means the reply was accepted and saved. It does not mean the supervisor has resumed. Supervisor progress shows up shortly afterwards, so poll the request state rather than expecting it to change by the time this endpoint returns.
 
 ```json
 {
@@ -52,6 +54,10 @@ curl -X POST http://localhost:3001/webhook \
 | Status | Body | Meaning |
 | --- | --- | --- |
 | 404 | `{ "error": "Request not found" }` | The `requestID` does not exist. |
+
+## Background processing
+
+If the background resume fails or is cut off, the reply stays unprocessed. waybill-arc retries unprocessed replies at startup and every 10 minutes, once any existing 15-minute claim on the reply expires. See [Acknowledgement and background processing](/guides/webhooks#acknowledgement-and-background-processing).
 
 ## Related
 
