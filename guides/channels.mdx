@@ -56,6 +56,23 @@ ON CONFLICT (supplier_id, channel) DO UPDATE SET address = EXCLUDED.address;
 - For `sms`, the thread is the Vapi session ID.
 - For `email`, the thread is managed by AgentMail.
 
+## Supplier simulator and testing
+
+The supplier simulator stands in for real suppliers during development. waybill-arc uses the deployed simulator at `https://supplier-simulation.vercel.app` by default (`SUPPLIER_API_URL`). Its manual personas (`MANUAL-1` to `MANUAL-3`) are answered in the simulator website, and its replies arrive at `POST /webhook` when `SUPPLIER_SIMULATOR=true`.
+
+Combine `SUPPLIER_SIMULATOR` and `TEST_SUPPLIERS` to choose a testing mode:
+
+| `SUPPLIER_SIMULATOR` | `TEST_SUPPLIERS` | Suppliers |
+| --- | --- | --- |
+| `false` | unset | Real supplier discovery. Every message goes to your test email, WhatsApp number, or phone |
+| `false` | set | Your test contacts appear as candidates. You pick them, along with a channel, in the UI |
+| `true` | unset | The deployed simulator supplies matching AI personas plus every manual persona (`MANUAL-1` to `MANUAL-3`) |
+| `true` | set | The simulator's suppliers plus all your test contacts, reached over real email, WhatsApp, and voice |
+
+A supplier's stored address in `supplier_contacts` is only used when live delivery is on for that channel (`EMAIL_LIVE_DELIVERY`, `WHATSAPP_LIVE_DELIVERY`, `VOICE_LIVE_DELIVERY`) or when the supplier is a test supplier. Otherwise waybill-arc sends to `EMAIL_TEST_ADDRESS`, `WHATSAPP_TEST_NUMBER`, or `VOICE_TEST_NUMBER`.
+
+`scripts/dev.sh` forces live delivery off on every channel, including `VOICE_LIVE_DELIVERY`, and listens on the Hookdeck sources `email-dev`, `whatsapp`, `vapi-dev`, and `simulator`. See [Testing modes](/configuration/environment#testing-modes) for the `TEST_SUPPLIERS` format.
+
 ## Email (AgentMail)
 
 To receive email replies, point AgentMail at `POST /webhook/email` and store the printed webhook secret as `AGENTMAIL_WEBHOOK_SECRET`.
@@ -78,6 +95,10 @@ Required environment variables:
 Vapi needs no webhook registration step. Every call creates a transient assistant carrying `server.url` and `server.headers`, so setting `VAPI_WEBHOOK_URL` and `VAPI_WEBHOOK_SECRET` is enough for `POST /webhook/vapi` to start receiving events.
 
 A voice call delivers the message to the supplier, falls back to voicemail if unanswered, and fires `end-of-call-report` when the call ends. That event resumes the supervisor automatically. `getThread` reconstructs the conversation from the call transcript.
+
+An unanswered call is not a supplier reply. waybill-arc treats a call as unanswered when Vapi ends it with `voicemail`, `customer-did-not-answer`, or `customer-busy`, or when the call analysis reports `answeredByPerson: false`. If the analysis is missing and the transcript has no supplier speech, the call also counts as unanswered. The thread then shows a single outbound entry, such as `Call not answered; voicemail left.`, and the report doesn't wake the supplier's worker.
+
+Vapi splits speech into fragments. `getThread` merges consecutive fragments from the same speaker into one message per speaker turn.
 
 Required environment variables:
 

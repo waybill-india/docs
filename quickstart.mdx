@@ -13,7 +13,6 @@ Before you begin, make sure you have the following ready:
 - **Node.js \>= 20**
 - **A Postgres database** (used for LangGraph checkpoints and agent memory)
 - **An OpenAI API key**
-- **A running supplier simulator** exposing `GET /api/getAllSuppliers`
 
 <Steps>
   <Step title="Install dependencies">
@@ -29,8 +28,9 @@ Before you begin, make sure you have the following ready:
     ```bash
     OPENAI_API_KEY=sk-...
     DATABASE_URL=postgres://user:pass@host:5432/dbname
-    SUPPLIER_API_URL=https://your-supplier-sim.example.com
     ```
+
+    `SUPPLIER_API_URL` defaults to the deployed supplier simulator at `https://supplier-simulation.vercel.app`, so you don't need to run a simulator locally. Set it only to point at a different simulator.
 
     Optional variables like `CONFIDENCE_THRESHOLD`, `MAX_TOOL_ITERATIONS`, and channel keys are covered in [Environment Variables](/configuration/environment).
   </Step>
