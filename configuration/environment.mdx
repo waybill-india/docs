@@ -12,7 +12,6 @@ waybill-arc reads its configuration from a `.env` file in the repo root, validat
 | --- | --- |
 | `OPENAI_API_KEY` | OpenAI key for LLM calls |
 | `DATABASE_URL` | Postgres connection string for LangGraph checkpoints and channel tables |
-| `SUPPLIER_API_URL` | Base URL for the supplier simulator exposing `GET /api/getAllSuppliers` |
 
 ## Agent tuning
 
@@ -20,6 +19,51 @@ waybill-arc reads its configuration from a `.env` file in the repo root, validat
 | --- | --- | --- |
 | `CONFIDENCE_THRESHOLD` | `0.9` | Minimum confidence before intake resolves a query |
 | `MAX_TOOL_ITERATIONS` | `15` | Cap on agent tool-call loops |
+
+## Suppliers and testing
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `SUPPLIER_API_URL` | `https://supplier-simulation.vercel.app` | Base URL of the supplier simulator. Defaults to the deployed simulator, so you don't need to run one locally |
+| `SUPPLIER_SIMULATOR` | `false` | Use the simulator's suppliers instead of real supplier discovery |
+| `TEST_SUPPLIERS` | — | JSON array of your own contacts, reached on real channels during testing |
+| `EMAIL_LIVE_DELIVERY` | `false` | Send email to suppliers' stored addresses. When `false`, email goes to `EMAIL_TEST_ADDRESS` |
+| `EMAIL_TEST_ADDRESS` | — | Receives every RFQ email while live delivery is off |
+| `WHATSAPP_LIVE_DELIVERY` | `false` | Send WhatsApp messages to suppliers' stored numbers. When `false`, messages go to `WHATSAPP_TEST_NUMBER` |
+| `WHATSAPP_TEST_NUMBER` | — | Receives every WhatsApp message while live delivery is off |
+| `VOICE_LIVE_DELIVERY` | `false` | Call suppliers' stored numbers. When `false`, calls go to `VOICE_TEST_NUMBER` |
+| `VOICE_TEST_NUMBER` | — | Receives every voice call while live delivery is off. Use E.164 format with a leading `+` |
+
+### Testing modes
+
+`SUPPLIER_SIMULATOR` and `TEST_SUPPLIERS` together decide which suppliers a request uses and how waybill-arc reaches them:
+
+| `SUPPLIER_SIMULATOR` | `TEST_SUPPLIERS` | Suppliers |
+| --- | --- | --- |
+| `false` | unset | Real supplier discovery. Every message goes to your test email, WhatsApp number, or phone |
+| `false` | set | Your test contacts appear as candidates. You pick them, along with a channel, in the UI |
+| `true` | unset | The deployed simulator supplies matching AI personas plus every manual persona (`MANUAL-1` to `MANUAL-3`) |
+| `true` | set | The simulator's suppliers plus all your test contacts, reached over real email, WhatsApp, and voice |
+
+waybill-arc only uses a supplier's stored address when live delivery is on for that channel or when the supplier is one of your `TEST_SUPPLIERS`. Otherwise it sends to the matching test address or number. Test suppliers are reached on real channels even while live delivery is off.
+
+Each entry in `TEST_SUPPLIERS` needs a unique `id`, a `channel` (`email`, `whatsapp`, or `voice`), and an `address`. Voice addresses must use E.164 format with a leading `+`.
+
+```sh
+TEST_SUPPLIERS='[{"id":"me-email","channel":"email","address":"you@example.com"},{"id":"me-voice","channel":"voice","address":"+14155550123"}]'
+```
+
+When `TEST_SUPPLIERS` is set, `EMAIL_TEST_ADDRESS`, `WHATSAPP_TEST_NUMBER`, and `VOICE_TEST_NUMBER` become optional. Without it, waybill-arc requires the test address for each configured channel whose live delivery is off.
+
+### Local dev script
+
+`scripts/dev.sh` runs the local stack. It forces `EMAIL_LIVE_DELIVERY`, `WHATSAPP_LIVE_DELIVERY`, and `VOICE_LIVE_DELIVERY` to `false`, and defaults to `SUPPLIER_SIMULATOR=true` with the deployed simulator. It runs Hookdeck against port `3001` with the `email-dev`, `whatsapp`, `vapi-dev`, and `simulator` sources, so simulator replies, test-contact replies, and Vapi call reports reach your machine:
+
+```bash
+hookdeck listen 3001 email-dev,whatsapp,vapi-dev,simulator
+```
+
+The `simulator` source forwards replies to every developer running Hookdeck. Each waybill-arc instance ignores replies for requests it doesn't have.
 
 ## Tracing (Langfuse)
 
@@ -60,7 +104,11 @@ waybill-arc reads its configuration from a `.env` file in the repo root, validat
 # Required
 OPENAI_API_KEY=sk-...
 DATABASE_URL=postgres://user:pass@host:5432/dbname
-SUPPLIER_API_URL=https://your-supplier-sim.example.com
+
+# Suppliers and testing (optional)
+SUPPLIER_SIMULATOR=true
+EMAIL_TEST_ADDRESS=you@example.com
+VOICE_TEST_NUMBER=+14155550123
 
 # Agent tuning
 CONFIDENCE_THRESHOLD=0.9
